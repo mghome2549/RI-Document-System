@@ -1,0 +1,5 @@
+# Netlify configuration file for React SPA Routing compatibility
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

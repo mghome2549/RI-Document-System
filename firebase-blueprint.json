@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "document": {
+      "title": "Document",
+      "description": "A document record created in the system (Inbox or Outbox)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "number": { "type": "string" },
+        "sender": { "type": "string" },
+        "receiver": { "type": "string" },
+        "receiveDate": { "type": "string", "format": "date" },
+        "dueDate": { "type": "string", "format": "date" },
+        "academicYear": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "completed", "late"] },
+        "priority": { "type": "string", "enum": ["normal", "urgent", "very_urgent"] },
+        "category": { "type": "string", "enum": ["inbox", "outbox"] },
+        "notes": { "type": "string" },
+        "attachmentUrl": { "type": "string" },
+        "serviceRating": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "number", "sender", "receiver", "receiveDate", "academicYear", "status", "priority", "category"]
+    },
+    "admin_config": {
+      "title": "Admin Config",
+      "description": "Stores a list of admin emails and system configurations",
+      "type": "object",
+      "properties": {
+        "adminEmails": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["adminEmails", "updatedAt"]
+    },
+    "counter": {
+      "title": "Yearly Counter",
+      "description": "Stores the sequential counter value for an academic year",
+      "type": "object",
+      "properties": {
+        "counter": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["counter", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "documents": {
+      "schema": "document",
+      "description": "Collection of all documents (Inbox + Outbox)"
+    },
+    "admin_settings/config": {
+      "schema": "admin_config",
+      "description": "Global administrator configurations and settings containing admin emails list"
+    },
+    "counters": {
+      "schema": "counter",
+      "description": "Yearly sequential counters used as atomic increment anchors"
+    }
+  }
+}
