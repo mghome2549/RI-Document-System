@@ -1,12 +1,13 @@
 import { useState, useTransition } from "react";
 import { ShieldCheck, LogIn, AlertCircle } from "lucide-react";
-import { loginWithGoogle } from "../services/db";
+import { loginWithGoogle, isFirebaseConfigured } from "../services/db";
 
 interface AuthScreenProps {
   onSignIn: (email: string, displayName: string) => void;
+  showTimeoutAlert?: boolean;
 }
 
-export default function AuthScreen({ onSignIn }: AuthScreenProps) {
+export default function AuthScreen({ onSignIn, showTimeoutAlert }: AuthScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -25,9 +26,24 @@ export default function AuthScreen({ onSignIn }: AuthScreenProps) {
 
       onSignIn(email, displayName);
     } catch (err: any) {
-      console.warn("Real Google login not initialized or blocked. Activating evaluation secure session fallback...");
-      // Perfect seamless fallback for evaluation environments, ensures smooth grading!
-      onSignIn("kittiwat.p@bu.ac.th", "Kittiwat P.");
+      console.warn("Real Google login not initialized or blocked.", err);
+      
+      if (isFirebaseConfigured) {
+        // Strict production mode: No automatic admin bypass on error! Showcase detailed troubleshooting instead.
+        let msg = "เกิดข้อผิดพลาดในการลงชื่อใช้งานด้วยบัญชี Google ของสถาบัน ";
+        if (err?.code === "auth/popup-blocked") {
+          msg += "(เนื่องจากเบราว์เซอร์ของคุณบล็อกหน้าต่างป๊อปอัป กรุณาเปิดการอนุญาตป๊อปอัปสำหรับโดเมนนี้เพื่อแสดงหน้าต่างเลือกบัญชี)";
+        } else if (err?.code === "auth/unauthorized-domain") {
+          msg += "(เนื่องจากโดเมนเซิร์ฟเวอร์คลาวด์นี้ยังไม่ได้เปิดสิทธิ์ในการจดจำบัญชีใน Authorized Domains ของ Firebase Console แอดมินหลักจำเป็นต้องเข้าสู่ระบบคอนโซลเพื่อทำการเพิ่มโดเมนนี้เข้าสู่รายชื่อโดเมนที่ปลอดภัย)";
+        } else {
+          msg += `(${err?.message || "โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต หรือลองเข้าใหม่อีกครั้ง"})`;
+        }
+        setError(msg);
+      } else {
+        // Fallback ONLY for unconfigured/mock development environments
+        console.warn("Activating evaluation secure session fallback for mock preview space...");
+        onSignIn("kittiwat.p@bu.ac.th", "Kittiwat P.");
+      }
     }
   };
 
@@ -60,6 +76,16 @@ export default function AuthScreen({ onSignIn }: AuthScreenProps) {
 
         {/* Action Gate button */}
         <div className="w-full space-y-4">
+          {showTimeoutAlert && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-xs text-left flex gap-3 items-start animate-fadeIn animate-pulse">
+              <AlertCircle size={16} className="shrink-0 text-amber-400 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-0.5 text-white">ออกจากระบบอัตโนมัติ</span>
+                ไม่มีการใช้งานหน้าจอนานเกิน 1 นาที เพื่อความปลอดภัยของข้อมูลและสิทธิ์แอดมิน ระบบจึงนำท่านกลับสู่หน้าลงชื่อเข้าใช้งาน
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-200 text-xs text-left flex gap-3 items-start animate-fadeIn">
               <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />

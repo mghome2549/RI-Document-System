@@ -409,11 +409,11 @@ export default function IncomingDocuments({
 📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
 โปรดคลิกลิงก์เลือกระดับดาวเพื่อบันทึกคะแนนประเมินความพึงพอใจของท่านลงในระบบโดยตรง:
 
-😄 ดีเยี่ยม (5 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=5
-🙂 ดี (4 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=4
-😐 ปานกลาง (3 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=3
+🤬 ปรับปรุง (1 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=1
 🙁 พอใช้ (2 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=2
-😞 ปรับปรุง (1 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=1
+😐 ปานกลาง (3 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=3
+😊 ดี (4 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=4
+🤩 ดีเยี่ยม (5 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=5
 --------------------------------------------------`;
 
       const emailBody = `เรียน ${docSender} (${docDept})
@@ -1557,11 +1557,11 @@ Email: kittiwat.p@bu.ac.th
 
                 <div className="flex items-center justify-center gap-2 sm:gap-4 py-2">
                   {[
-                    { val: 5, label: "ดีเยี่ยม (5)", emoji: "😄", text: "ดีเยี่ยม" },
-                    { val: 4, label: "ดี (4)", emoji: "🙂", text: "ดี" },
-                    { val: 3, label: "ปานกลาง (3)", emoji: "😐", text: "ปานกลาง" },
+                    { val: 1, label: "ปรับปรุง (1)", emoji: "🤬", text: "ปรับปรุง" },
                     { val: 2, label: "พอใช้ (2)", emoji: "🙁", text: "พอใช้" },
-                    { val: 1, label: "ปรับปรุง (1)", emoji: "😞", text: "ปรับปรุง" }
+                    { val: 3, label: "ปานกลาง (3)", emoji: "😐", text: "ปานกลาง" },
+                    { val: 4, label: "ดี (4)", emoji: "😊", text: "ดี" },
+                    { val: 5, label: "ดีเยี่ยม (5)", emoji: "🤩", text: "ดีเยี่ยม" }
                   ].map((opt) => {
                     const isSelected = rating >= opt.val;
                     const isExactlySelected = rating === opt.val;

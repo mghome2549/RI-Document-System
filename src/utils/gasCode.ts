@@ -89,8 +89,8 @@ function doPost(e) {
     
     var lastRow = sheet.getLastRow();
     
-    if (action === "IMPORT_CSV") {
-      var records = payload.data;
+    if (action === "IMPORT_CSV" || action === "IMPORT_PROFS") {
+      var records = payload.data || payload.records;
       if (!records || !Array.isArray(records)) {
         throw new Error("ไม่พบข้อมูลอาเรย์สำหรับนำเข้า CSV (IMPORT_CSV)");
       }
@@ -184,15 +184,16 @@ function doPost(e) {
       });
     }
     
-    if (action === "ADD_PROF") {
+    if (action === "ADD" || action === "ADD_PROF") {
       // เพิ่มข้อมูลอาจารย์ใหม่ลงแถวล่าสุด
-      var newId = payload.id || "prof-" + new Date().getTime();
-      var name = payload.name || "";
-      var personalId = payload.personalId || "";
-      var position = payload.position || "";
-      var department = payload.department || "";
-      var email = payload.email || "";
-      var phone = payload.phone || "";
+      var profData = payload.professor || payload || {};
+      var newId = profData.id || payload.id || "prof-" + new Date().getTime();
+      var name = profData.name || payload.name || "";
+      var personalId = profData.personalId || payload.personalId || "";
+      var position = profData.position || payload.position || "";
+      var department = profData.department || payload.department || "";
+      var email = profData.email || payload.email || "";
+      var phone = profData.phone || payload.phone || "";
       
       sheet.appendRow([newId, name, personalId, position, department, email, phone]);
       
@@ -203,9 +204,10 @@ function doPost(e) {
       });
     }
     
-    if (action === "EDIT_PROF") {
+    if (action === "EDIT" || action === "EDIT_PROF") {
       // แก้ไขข้อมูลแถวเดิมตาม ID ที่ระบุ
-      var targetId = payload.id;
+      var profData = payload.professor || payload || {};
+      var targetId = profData.id || payload.id;
       if (!targetId) throw new Error("ไม่พบรหัสผู้ใช้ ID ในคำสั่งแก้ไข");
       
       var foundRow = -1;
@@ -219,12 +221,12 @@ function doPost(e) {
         }
       }
       
-      var name = payload.name || "";
-      var personalId = payload.personalId || "";
-      var position = payload.position || "";
-      var department = payload.department || "";
-      var email = payload.email || "";
-      var phone = payload.phone || "";
+      var name = profData.name || payload.name || "";
+      var personalId = profData.personalId || payload.personalId || "";
+      var position = profData.position || payload.position || "";
+      var department = profData.department || payload.department || "";
+      var email = profData.email || payload.email || "";
+      var phone = profData.phone || payload.phone || "";
       
       if (foundRow !== -1) {
         sheet.getRange(foundRow, 2).setValue(name);
@@ -249,8 +251,10 @@ function doPost(e) {
       }
     }
     
-    if (action === "DELETE_PROF") {
-      // ลบข้อมูลแถวตาม ID ที่ระบุ
+    if (action === "DELETE" || action === "DELETE_PROF") {
+      // ลบข้อมูลแถวตาม ID ที่ระบุ จาก Google Sheets
+      // ⚠️ กฎเหล็กด้านความปลอดภัยด้านความเป็นส่วนตัว: ห้ามทำการส่งอีเมลแจ้งเตือนใด ๆ ทั้งสิ้นเมื่อทำการลบข้อมูล
+      // ห้ามมีคำสั่ง MailApp.sendEmail หรือ GmailApp.sendEmail ในเคสนี้เด็ดขาด ระบบจะทำงานเงียบ ๆ เท่านั้น
       var targetId = payload.id;
       if (!targetId) throw new Error("ไม่พบรหัสผู้ใช้ ID ในคำสั่งลบ");
       
@@ -269,7 +273,7 @@ function doPost(e) {
         sheet.deleteRow(foundRow);
         return responseJson({
           status: "success",
-          message: "ลบข้อมูลอาจารย์เรียบร้อยแล้ว"
+          message: "ลบข้อมูลอาจารย์เรียบร้อยแล้ว (ไม่มีการส่งอีเมลแจ้งเตือนใดๆ เพื่อความปลอดภัยสูงสุด)"
         });
       } else {
         throw new Error("ไม่พบข้อมูลอาจารย์ที่มีรหัส ID: " + targetId);

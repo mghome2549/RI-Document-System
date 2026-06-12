@@ -787,41 +787,92 @@ export async function deleteDocument(id: string): Promise<void> {
   }
 }
 
-export async function fetchAdminEmails(): Promise<string[]> {
+export async function fetchPrimaryOwnerEmail(): Promise<string> {
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const docRef = doc(db, "admin_settings", "config");
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        return data.adminEmails || ["kittiwat.p@bu.ac.th"];
+        if (data.primaryOwnerEmail) {
+          localStorage.setItem("bu_primary_owner_email", data.primaryOwnerEmail);
+          return data.primaryOwnerEmail;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch primary owner from firestore, using local fallback", err);
+    }
+  }
+  const stored = localStorage.getItem("bu_primary_owner_email");
+  return stored || "kittiwat.p@bu.ac.th";
+}
+
+export async function savePrimaryOwnerEmail(email: string): Promise<void> {
+  const sanitized = email.trim().toLowerCase();
+  localStorage.setItem("bu_primary_owner_email", sanitized);
+
+  if (isFirebaseConfigured && db && auth?.currentUser) {
+    try {
+      const docRef = doc(db, "admin_settings", "config");
+      await setDoc(docRef, {
+        primaryOwnerEmail: sanitized,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Failed to save primary owner to firestore", err);
+    }
+  }
+}
+
+export async function fetchAdminEmails(): Promise<string[]> {
+  const currentOwner = await fetchPrimaryOwnerEmail();
+  if (isFirebaseConfigured && db && auth?.currentUser) {
+    try {
+      const docRef = doc(db, "admin_settings", "config");
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        let admins = data.adminEmails || [currentOwner];
+        if (!admins.includes(currentOwner)) {
+          admins = [...admins, currentOwner];
+        }
+        return admins;
       } else {
         // Safe bootstrap initialization if missing
         await setDoc(docRef, {
-          adminEmails: ["kittiwat.p@bu.ac.th"],
+          adminEmails: [currentOwner],
+          primaryOwnerEmail: currentOwner,
           updatedAt: new Date().toISOString()
         });
-        return ["kittiwat.p@bu.ac.th"];
+        return [currentOwner];
       }
     } catch (err) {
       try {
-        // Graceful fallback for permission deniability
-        return ["kittiwat.p@bu.ac.th"];
+        const stored = localStorage.getItem(MOCK_STORAGE_KEY_ADMINS);
+        let list = stored ? JSON.parse(stored) : [currentOwner];
+        if (!list.includes(currentOwner)) {
+          list.push(currentOwner);
+        }
+        return list;
       } catch {
         handleFirestoreError(err, OperationType.GET, "admin_settings/config");
       }
     }
   } else {
     const stored = localStorage.getItem(MOCK_STORAGE_KEY_ADMINS);
-    return stored ? JSON.parse(stored) : ["kittiwat.p@bu.ac.th"];
+    let list = stored ? JSON.parse(stored) : [currentOwner];
+    if (!list.includes(currentOwner)) {
+      list.push(currentOwner);
+    }
+    return list;
   }
 }
 
 export async function saveAdminEmails(emails: string[]): Promise<void> {
-  // Ensure that no duplicates and at least the initial admin is kept
+  const currentOwner = await fetchPrimaryOwnerEmail();
   const sanitized = Array.from(new Set(emails)).filter(e => e.endsWith("@bu.ac.th"));
-  if (!sanitized.includes("kittiwat.p@bu.ac.th")) {
-    sanitized.push("kittiwat.p@bu.ac.th");
+  if (!sanitized.includes(currentOwner)) {
+    sanitized.push(currentOwner);
   }
 
   if (isFirebaseConfigured && db && auth?.currentUser) {
@@ -829,13 +880,54 @@ export async function saveAdminEmails(emails: string[]): Promise<void> {
       const docRef = doc(db, "admin_settings", "config");
       await setDoc(docRef, {
         adminEmails: sanitized,
+        primaryOwnerEmail: currentOwner,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, "admin_settings/config");
     }
   } else {
     localStorage.setItem(MOCK_STORAGE_KEY_ADMINS, JSON.stringify(sanitized));
+  }
+}
+
+export async function transferPrimaryOwner(newOwnerEmail: string): Promise<void> {
+  const sanitized = newOwnerEmail.trim().toLowerCase();
+  if (!sanitized.endsWith("@bu.ac.th")) {
+    throw new Error("อีเมลต้องลงท้ายด้วย @bu.ac.th เท่านั้น");
+  }
+
+  localStorage.setItem("bu_primary_owner_email", sanitized);
+
+  // Read current admins, append the new owner if not already in list
+  const storedAdmins = localStorage.getItem(MOCK_STORAGE_KEY_ADMINS);
+  let admins: string[] = storedAdmins ? JSON.parse(storedAdmins) : ["kittiwat.p@bu.ac.th"];
+  if (!admins.includes(sanitized)) {
+    admins.push(sanitized);
+  }
+
+  if (isFirebaseConfigured && db && auth?.currentUser) {
+    try {
+      const docRef = doc(db, "admin_settings", "config");
+      const docSnap = await getDoc(docRef);
+      let firebaseAdmins = admins;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        firebaseAdmins = data.adminEmails || admins;
+        if (!firebaseAdmins.includes(sanitized)) {
+          firebaseAdmins = [...firebaseAdmins, sanitized];
+        }
+      }
+      await setDoc(docRef, {
+        adminEmails: firebaseAdmins,
+        primaryOwnerEmail: sanitized,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, "admin_settings/config");
+    }
+  } else {
+    localStorage.setItem(MOCK_STORAGE_KEY_ADMINS, JSON.stringify(admins));
   }
 }
 

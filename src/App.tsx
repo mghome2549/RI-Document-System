@@ -21,7 +21,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import IncomingDocuments from "./components/IncomingDocuments";
 import UserManagement from "./components/UserManagement";
-import { GraduationCap, Bell, Shield, LogOut, CheckCircle } from "lucide-react";
+import { GraduationCap, Bell, Shield, LogOut, CheckCircle, ShieldAlert } from "lucide-react";
 
 export default function App() {
   // Navigation & session state
@@ -30,6 +30,7 @@ export default function App() {
   const [userRole, setUserRole] = useState<"admin" | "viewer">("viewer");
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [authLoading, setAuthLoading] = useState(true);
+  const [showTimeoutAlert, setShowTimeoutAlert] = useState(false);
 
   // Public rating flow states
   const [ratingDocId, setRatingDocId] = useState<string | null>(null);
@@ -329,25 +330,72 @@ export default function App() {
   useEffect(() => {
     if (userEmail) {
       const lowerEmail = userEmail.toLowerCase();
+      const backupOwner = (typeof window !== "undefined" ? localStorage.getItem("bu_primary_owner_email") : null) || "kittiwat.p@bu.ac.th";
       // Primary owner backup check or check in registered emails list
-      if (lowerEmail === "kittiwat.p@bu.ac.th" || adminEmails.map(e => e.toLowerCase()).includes(lowerEmail)) {
+      if (lowerEmail === backupOwner.toLowerCase() || adminEmails.map(e => e.toLowerCase()).includes(lowerEmail)) {
         setUserRole("admin");
       } else {
         setUserRole("viewer");
+        // Non-admin viewers are restricted to ledger tab only
+        setActiveTab("ledger");
       }
     }
   }, [userEmail, adminEmails]);
+
+  // 5. Inactivity Secure Session Idle Timer (1-minute threshold)
+  useEffect(() => {
+    if (!userEmail) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const handleInactivityLogout = () => {
+      setShowTimeoutAlert(true);
+      handleSignOut(true);
+    };
+
+    const resetIdleTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // 1 minute = 60000 ms
+      timeoutId = setTimeout(handleInactivityLogout, 60000);
+    };
+
+    // Initialize timer on load
+    resetIdleTimer();
+
+    // Interaction events to listen to
+    const activeEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
+
+    activeEvents.forEach((event) => {
+      window.addEventListener(event, resetIdleTimer, { passive: true });
+    });
+
+    // Cleanup listeners and pending timeout
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      activeEvents.forEach((event) => {
+        window.removeEventListener(event, resetIdleTimer);
+      });
+    };
+  }, [userEmail]);
 
   // Auth helper
   const handleSignIn = (email: string, name: string) => {
     setUserEmail(email);
     setUserName(name);
+    setShowTimeoutAlert(false);
     // Reload databases on successful auth
     loadAdmins();
     loadDocuments();
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = (isIdle: boolean = false) => {
+    if (!isIdle) {
+      setShowTimeoutAlert(false);
+    }
     startSignOut(async () => {
       try {
         await signOutUser();
@@ -601,7 +649,39 @@ export default function App() {
 
   // Render Login overlay if not identified
   if (!userEmail) {
-    return <AuthScreen onSignIn={handleSignIn} />;
+    return <AuthScreen onSignIn={handleSignIn} showTimeoutAlert={showTimeoutAlert} />;
+  }
+
+  // If Viewer role (non-admin) is cut, deny access to the entire application other than authorized admins
+  if (userRole !== "admin") {
+    return (
+      <div id="unauthorized-access-screen" className="min-h-screen bg-[#071329] text-white flex flex-col items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-slate-900/60 border border-slate-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center space-y-6 animate-fadeIn">
+          <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full animate-bounce">
+            <ShieldAlert size={48} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-slate-100 tracking-tight">ไม่พบสิทธิ์การเข้าใช้งานระบบ</h2>
+            <p className="text-xs text-[#FFCC00] font-black uppercase font-mono tracking-wider">
+              {userEmail}
+            </p>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+            เนื่องจากระบบสารสนเทศ วพ. BU ฉบับนี้เป็นระบบเก็บข้อมูลเอกสารและประเมินผลภายในหน่วยงาน ไม่เปิดบริการแก่ส่วนบุคคลทั่วไป บัญชีของคุณจึงไม่มีสิทธิ์เข้าถึงข้อมูล
+          </p>
+          <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 text-[10px] text-slate-400 font-semibold leading-normal font-sans">
+            หากท่านมีความประสงค์จะอัปเดตหรือขอสิทธิ์การเขียนและจัดการ กรุณาติดต่อ อ.กิตติวัฒน์ หรือ ผู้ดูแลระบบหลัก (Primary Owner) ปัจจุบัน เพื่อทำการแต่งตั้งสิทธิ์บัญชีของท่านในภายหลัง
+          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full h-10 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition-all active:scale-95 shadow-md flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>ออกจากระบบ / สลับบัญชีอื่น</span>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

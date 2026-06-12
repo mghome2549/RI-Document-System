@@ -238,19 +238,11 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
   if (gasUrl && gasUrl !== "") {
     try {
       console.log(`Sending ${isEditing ? 'EDIT_PROF' : 'ADD_PROF'} payload to GAS:`, gasUrl, cleanProf);
-      
       const payload = {
         action: isEditing ? "EDIT_PROF" : "ADD_PROF",
-        id: cleanProf.id,
-        name: cleanProf.name,
-        personalId: cleanProf.personalId,
-        position: cleanProf.position,
-        department: cleanProf.department,
-        email: cleanProf.email,
-        phone: cleanProf.phone
+        professor: cleanProf
       };
 
-      // Send payload as plain text/parameters so bypass preflight restrictions securely
       await fetch(gasUrl, {
         method: "POST",
         mode: "no-cors",
@@ -260,7 +252,7 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
         body: JSON.stringify(payload)
       });
     } catch (err) {
-      console.error("Error communicating saveProfessor to Google Apps Script:", err);
+      console.error("Error saving professor to Google Sheets:", err);
     }
   }
 
@@ -276,34 +268,16 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
   let currentList: Professor[] = stored ? JSON.parse(stored) : [...DEFAULT_PROFESSORS];
 
   const updatedDocs: Professor[] = [];
-  const timestamp = Date.now();
   let upsertedCount = 0;
   let insertedCount = 0;
 
   for (let idx = 0; idx < professorsList.length; idx++) {
     const rawP = professorsList[idx];
-    const email = rawP.email.trim();
-    const name = rawP.name.trim();
-    const personalId = rawP.personalId?.trim() || "";
-
-    // Find if there is an existing match in currentList
-    let existingIndex = -1;
-
-    if (email) {
-      existingIndex = currentList.findIndex(
-        (p) => p.email && p.email.toLowerCase().trim() === email.toLowerCase().trim()
-      );
-    }
-    if (existingIndex === -1 && personalId) {
-      existingIndex = currentList.findIndex(
-        (p) => p.personalId && p.personalId.toString().trim() === personalId.toString().trim()
-      );
-    }
-    if (existingIndex === -1 && name) {
-      existingIndex = currentList.findIndex(
-        (p) => p.name && p.name.toLowerCase().trim() === name.toLowerCase().trim()
-      );
-    }
+    const existingIndex = currentList.findIndex(
+      (p) =>
+        (p.email && p.email.trim().toLowerCase() === rawP.email.trim().toLowerCase()) ||
+        (p.personalId && rawP.personalId && p.personalId.trim() === rawP.personalId.trim())
+    );
 
     if (existingIndex !== -1) {
       // Upsert: Overwrite matching record
@@ -313,22 +287,23 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
         name: rawP.name.trim(),
         personalId: rawP.personalId?.trim() || match.personalId || "",
         position: rawP.position?.trim() || match.position || "",
-        department: rawP.department.trim(),
-        email: rawP.email.trim(),
+        department: rawP.department?.trim() || match.department || "",
+        email: rawP.email?.trim() || match.email || "",
         phone: rawP.phone?.trim() || match.phone || ""
       };
       currentList[existingIndex] = updatedProf;
       updatedDocs.push(updatedProf);
       upsertedCount++;
     } else {
-      // Insert: Create new
+      // Insert: New record
+      const newId = `prof-${Date.now()}-${idx}`;
       const newProf: Professor = {
-        id: `prof-${timestamp}-${idx}`,
+        id: newId,
         name: rawP.name.trim(),
         personalId: rawP.personalId?.trim() || "",
         position: rawP.position?.trim() || "",
-        department: rawP.department.trim(),
-        email: rawP.email.trim(),
+        department: rawP.department?.trim() || "",
+        email: rawP.email?.trim() || "",
         phone: rawP.phone?.trim() || ""
       };
       currentList.push(newProf);
@@ -337,7 +312,6 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
     }
   }
 
-  // Save back to LocalStorage
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(currentList));
 
   // 2. Sync to Firestore
@@ -353,20 +327,21 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
           email: p.email,
           phone: p.phone,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        });
       }
     } catch (err) {
-      console.error("Error bulk upserting to Firestore:", err);
+      console.error("Error syncing imported CSV professors to Firestore:", err);
     }
   }
 
-  // 3. Sync to Google Sheets
+  // 3. Sync to Google Sheets (POST call)
   const gasUrl = await getGoogleAppsScriptUrl();
   if (gasUrl && gasUrl !== "") {
     try {
+      console.log(`Sending CSV Batch IMPORT_PROFS to GAS:`, gasUrl, updatedDocs.length);
       const payload = {
-        action: "IMPORT_CSV",
-        data: updatedDocs
+        action: "IMPORT_PROFS",
+        records: updatedDocs
       };
 
       await fetch(gasUrl, {
@@ -378,7 +353,7 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
         body: JSON.stringify(payload)
       });
     } catch (err) {
-      console.error("Error sending bulk upsert to Google Apps Script:", err);
+      console.error("Error communicating CSV Import to Google Apps Script:", err);
     }
   }
 

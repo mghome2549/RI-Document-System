@@ -27,6 +27,7 @@ import {
   importProfessorsCsv
 } from "../services/professors";
 import { GOOGLE_APPS_SCRIPT_CODE } from "../utils/gasCode";
+import { fetchPrimaryOwnerEmail, transferPrimaryOwner } from "../services/db";
 
 interface UserManagementProps {
   adminEmails: string[];
@@ -49,6 +50,11 @@ export default function UserManagement({
   const [newEmail, setNewEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Dynamic Primary Owner & Delegation States
+  const [primaryOwner, setPrimaryOwner] = useState<string>("kittiwat.p@bu.ac.th");
+  const [transferTargetEmail, setTransferTargetEmail] = useState<string | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false);
 
   // Sub-tabs State for Settings Page
   const [subTab, setSubTab] = useState<"admins" | "professors" | "gas_integration">("admins");
@@ -76,11 +82,41 @@ export default function UserManagement({
   const [gasTestResult, setGasTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
   const [isCodeCopied, setIsCodeCopied] = useState(false);
 
-  // Load professors & GAS Url
+  // Load professors & GAS Url & Primary Owner
   useEffect(() => {
     loadProfs();
     loadGasUrl();
+    loadPrimaryOwner();
   }, []);
+
+  const loadPrimaryOwner = async () => {
+    try {
+      const owner = await fetchPrimaryOwnerEmail();
+      setPrimaryOwner(owner);
+    } catch (err) {
+      console.error("Error loading primary owner email:", err);
+    }
+  };
+
+  const handleTransferConfirm = async () => {
+    if (!transferTargetEmail) return;
+    setIsTransferring(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await transferPrimaryOwner(transferTargetEmail);
+      setSuccess(`สิทธิ์ผู้ดูแลหลัก (Primary Owner) ถูกส่งมอบให้แก่ ${transferTargetEmail} เป็นที่เรียบร้อยแล้ว ระบบจะทำการรีโหลดข้อมูลสิทธิ์ในสักครู่`);
+      setPrimaryOwner(transferTargetEmail);
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งมอบสิทธิ์ดูแลหลัก");
+    } finally {
+      setIsTransferring(false);
+      setTransferTargetEmail(null);
+    }
+  };
 
   const loadProfs = async () => {
     setIsProfLoading(true);
@@ -328,10 +364,11 @@ export default function UserManagement({
   };
 
   const handleProfDelete = async (id: string, name: string) => {
+    if (!profToDelete) return;
     setIsProfLoading(true);
     try {
       await deleteProfessor(id);
-      setSuccess(`ลบข้อมูล "${name}" เรียบร้อยเรียบร้อยแล้ว`);
+      setSuccess(`ลบข้อมูล "${name}" เรียบร้อยแล้ว`);
       setTimeout(() => setSuccess(null), 3500);
       loadProfs();
     } catch (err) {
@@ -348,8 +385,8 @@ export default function UserManagement({
     setError(null);
     setSuccess(null);
 
-    if (email === "kittiwat.p@bu.ac.th") {
-      setError("สิทธิ์ที่ได้รับจากการส่งมอบสูงสุดของคณบดี (kittiwat.p@bu.ac.th) เป็นระบบหลัก ไม่ได้รับอนุญาตให้ถอดถอน");
+    if (email === primaryOwner) {
+      setError(`สิทธิ์ผู้ดูแลระบบสูงสุด (${primaryOwner}) เป็นระบบหลัก ไม่ได้รับอนุญาตให้ถอนถอน`);
       return;
     }
 
@@ -374,6 +411,25 @@ export default function UserManagement({
       prof.email.toLowerCase().includes(q)
     );
   });
+
+  if (!isAdmin) {
+    return (
+      <div id="access-denied-container" className="bg-white border border-slate-200 rounded-3xl p-8 max-w-lg mx-auto text-center shadow-xl space-y-6 my-10 font-sans">
+        <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-600 animate-pulse">
+          <Shield size={32} />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-lg font-black text-slate-900">ปฏิเสธการเข้าถึง (Access Denied)</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            ขออภัย ส่วนการตั้งค่าและบำรุงรักษาระบบ (System Configuration) นี้ สงวนสิทธิ์สำหรับอาจารย์ผู้ดูแลระบบ (Admin) เท่านั้น เนื่องจากเป็นระบบเอกสารภายในหน่วยงานเพื่อรักษาความปลอดภัยขั้นสูงสำหรับข้อมูลทั้งหมด
+          </p>
+        </div>
+        <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400">
+          หากท่านเป็นผู้ดูแลระบบหลัก กรุณาติดต่อ อ.กิตติวัฒน์ โพธิ์งามบวรชัย เพื่อขอเปิดใช้งานสิทธิ์
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="user-management-panel" className="space-y-6 font-sans pb-10">
@@ -459,23 +515,19 @@ export default function UserManagement({
                 <UserCheck size={14} className="text-emerald-600" />
                 <span>นโยบายสิทธิ์การเข้าถึงระดับระบบ (Role-Based Access Control)</span>
               </h3>
-              <ul className="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed font-semibold">
+              <ul className="text-[11px] text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed font-semibold font-sans">
                 <li>
-                  <strong className="text-indigo-900">Administrator (ผู้ดูแลระบบ):</strong> มีสิทธิ์เขียน อ่าน แก้ไข และลบข้อมูลเอกสารเข้า/ออก และมอบสิทธิ์แอดมินต่อได้
-                </li>
-                <li>
-                  <strong className="text-slate-705">Viewer (ผู้เข้าชม):</strong> ผู้ใช้งานบัญชีอีเมลสถาบัน 
-                  <code className="mx-1 bg-white px-1 border rounded text-[#003366] font-bold">@bu.ac.th</code> ทั่วไป สามารถอ่าน ค้นหา และคัดกรองเอกสารย้อนหลังได้โดยสมบูรณ์ (Read-Only)
+                  <strong className="text-indigo-900">Administrator (ผู้ดูแลระบบ):</strong> มีสิทธิ์เขียน อ่าน แก้ไข และลบข้อมูลเอกสารเข้า/ออก และจัดการแต่งตั้งสิทธิ์แอดมินเพิ่มเติมได้
                 </li>
               </ul>
             </div>
             
             <div className="bg-white p-3.5 rounded-lg border border-slate-200 text-[11px] text-slate-500 leading-normal flex gap-2.5 items-start">
               <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-              <div className="font-semibold">
-                <strong>หมายเหตุความปลอดภัย:</strong> บัญชีหลักอีเมลประเมินผลของผู้ใช้ 
-                <code className="mx-1 bg-indigo-50 font-mono text-indigo-800 px-1 border border-indigo-100 rounded">kittiwat.p@bu.ac.th</code> 
-                ได้รับสิทธิ์แอดมินสูงสุดโดยค่าเริ่มต้น เพื่อให้สอดคล้องกับข้อกำหนดและรับประกันการทดสอบระบบได้ทันที
+              <div className="font-semibold font-sans">
+                <strong>สิทธิ์เจ้าของหลัก (Primary Owner):</strong> สิทธิ์ผู้ดูแลระบบหลักสูงสุดปัจจุบันผูกกับบัญชี 
+                <code className="mx-1 bg-indigo-50 font-mono text-indigo-800 px-1 border border-indigo-100 rounded">{primaryOwner}</code> 
+                ซึ่งได้รับอำนาจสูงสุดในการแต่งตั้งหรือส่งมอบสิทธิ์ดูแลระบบต่อได้ในกรณีส่งมอบงานเพื่อการรักษาเสถียรภาพและปลอดภัยขั้นสูง
               </div>
             </div>
           </div>
@@ -537,7 +589,7 @@ export default function UserManagement({
 
                   <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto">
                     {adminEmails.map((email) => {
-                      const isPrimaryOwner = email === "kittiwat.p@bu.ac.th";
+                      const isPrimaryOwner = email === primaryOwner;
                       const isYou = email === currentUserEmail;
 
                       return (
@@ -552,12 +604,13 @@ export default function UserManagement({
                               </span>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {isPrimaryOwner && (
-                                  <span className="text-[8px] bg-indigo-100 border border-indigo-200 text-indigo-805 px-1 py-0.5 rounded font-bold uppercase tracking-wider font-sans">
-                                    Primary Owner
+                                  <span className="text-[8px] bg-amber-100 border border-amber-200 text-amber-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider font-sans flex items-center gap-0.5">
+                                    <Shield size={8} />
+                                    <span>Primary Owner</span>
                                   </span>
                                 )}
                                 {isYou && (
-                                  <span className="text-[8px] bg-blue-100 border border-blue-200 text-blue-805 px-1 py-0.5 rounded font-bold uppercase tracking-wider font-sans">
+                                  <span className="text-[8px] bg-blue-100 border border-blue-200 text-blue-800 px-1 py-0.5 rounded font-bold uppercase tracking-wider font-sans">
                                     คุณ (You)
                                   </span>
                                 )}
@@ -566,19 +619,33 @@ export default function UserManagement({
                           </div>
 
                           {isAdmin ? (
-                            <button
-                              type="button"
-                              disabled={isPrimaryOwner || isYou}
-                              onClick={() => handleRemove(email)}
-                              className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                                isPrimaryOwner || isYou
-                                  ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
-                                  : "bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100 hover:text-rose-700"
-                              }`}
-                              title={isPrimaryOwner ? "ระบบหลักไม่ได้รับอนุญาตให้ถอดถอน" : isYou ? "ไม่สามารถเพิกถอนตนเองได้" : "เพิกถอนสิทธิ์"}
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* If I am the primary owner and this is another admin, I can transfer ownership to them */}
+                              {currentUserEmail === primaryOwner && !isPrimaryOwner && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTransferTargetEmail(email)}
+                                  className="h-7 px-2 bg-indigo-50 hover:bg-indigo-100 text-[#003366] border border-indigo-150 rounded-lg text-[9px] font-bold flex items-center gap-1 transition-all active:scale-95 shrink-0"
+                                  title="โอนสิทธิ์ผู้ดูแลระบบหลักสูงสุดให้บัญชีนี้ (เช่น กรณีเกษียณอายุการทำงาน)"
+                                >
+                                  <Shield size={10} className="text-indigo-600" />
+                                  <span>โอนสิทธิ์ Owner</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                disabled={isPrimaryOwner || isYou}
+                                onClick={() => handleRemove(email)}
+                                className={`p-2 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                                  isPrimaryOwner || isYou
+                                    ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
+                                    : "bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100 hover:text-rose-700"
+                                }`}
+                                title={isPrimaryOwner ? "ระบบหลักไม่ได้รับอนุญาตให้ถอดถอน" : isYou ? "ไม่สามารถเพิกถอนตนเองได้" : "เพิกถอนสิทธิ์"}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-[9px] text-slate-400 font-bold font-sans">ผู้ได้รับแต่งตั้ง</span>
                           )}
@@ -1132,6 +1199,70 @@ export default function UserManagement({
                 className="h-9 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold transition-all cursor-pointer shadow-sm active:scale-98"
               >
                 ยืนยันการลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM TRANSFER PRIMARY OWNER MODAL */}
+      {transferTargetEmail && (
+        <div id="transfer-owner-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 flex flex-col animate-zoomIn text-xs font-semibold">
+            <div className="bg-indigo-950 p-4 text-white flex justify-between items-center select-none">
+              <div className="flex items-center gap-2">
+                <Shield size={18} className="text-amber-400 shrink-0" />
+                <div>
+                  <span className="text-[9px] text-indigo-300 font-bold block tracking-wider uppercase">แต่งตั้ง / ย้ายสิทธิ์ผู้ดูแลระบบหลัก</span>
+                  <h4 className="font-bold text-sm text-white mt-0.5">ยืนยันการส่งมอบสิทธิ์ดูแลหลักสูงสุด (Owner Transfer)</h4>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-5 space-y-4 font-sans">
+              <p className="text-slate-700 leading-relaxed font-semibold">
+                คุณแน่ใจหรือไม่ที่จะทำการโอนย้ายความรับผิดชอบหลัก สูงสุดของระบบประเมินเอกสารสิทธิ์ วพ. BU ให้แก่ผู้ดูแลท่านนี้?
+              </p>
+              
+              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-2">
+                <div className="font-bold text-amber-800 text-xs flex items-center gap-1">
+                  <AlertTriangle size={15} />
+                  <span>คำเตือนเนื่องจากการเกษียณสิทธิ์หรือการส่งมอบงาน:</span>
+                </div>
+                <ul className="list-disc pl-4 text-[11px] text-amber-900 font-medium space-y-1">
+                  <li>บัญชี <strong className="font-mono">{transferTargetEmail}</strong> จะกลายเป็นผู้ดูแลหลักสูงสุด (Primary Owner)</li>
+                  <li>ระบบความปลอดภัยจะไม่สามารถเพิกถอนสิทธิ์ หรือลบสัญญาสิทธิ์ของเจ้าของหลักคนใหม่นี้ได้</li>
+                  <li>สิทธิ์ของคุณจะเปลี่ยนเป็นผู้ดูแลทั่วไป (Administrator) และไม่สามารถโอนสิทธิ์กลับคืนได้ด้วยตนเอง จนกว่าเจ้าของหลักท่านใหม่จะดำเนินการคืนสิทธิ์ให้คุณ</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="bg-slate-50/80 px-4 py-3 border-t border-slate-100 flex justify-end gap-2.5 font-sans">
+              <button
+                type="button"
+                disabled={isTransferring}
+                onClick={() => setTransferTargetEmail(null)}
+                className="h-9 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={isTransferring}
+                onClick={handleTransferConfirm}
+                className="h-9 px-4 bg-indigo-950 hover:bg-slate-900 border border-indigo-900 text-white rounded-lg font-bold transition-all cursor-pointer shadow-sm active:scale-98 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isTransferring ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    <span>กำลังดำเนินการ...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={13} />
+                    <span>ยืนยันและส่งมอบงาน</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
