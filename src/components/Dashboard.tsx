@@ -281,9 +281,15 @@ export default function Dashboard({
       const canvas = await html2canvas(element, {
         scale: 2, // crisp quality for text and bars
         useCORS: true,
-        logging: false,
+        logging: true,
         backgroundColor: "#ffffff",
         allowTaint: true,
+        width: 794,
+        height: 1123,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 794,
+        windowHeight: 1123,
       });
 
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
@@ -553,7 +559,7 @@ export default function Dashboard({
               className="h-9 px-4 py-2 bg-[#0F2942] hover:bg-[#153452] text-white font-medium text-sm rounded-lg border border-amber-400/30 shadow-sm flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
             >
               <span className="text-amber-400 font-extrabold text-[#D4AF37]">📋</span>
-              <span className="tracking-wide">ตรวจสอบหน้ากระดานเดี่ยว (Ledger)</span>
+              <span className="tracking-wide">จัดการเอกสาร (Documents)</span>
             </button>
             <button
               onClick={handleExportCombineExcel}
@@ -573,7 +579,7 @@ export default function Dashboard({
               }`}
             >
               <span className="text-amber-400 font-extrabold text-[#D4AF37]">📊</span>
-              <span>{isExportingPdf ? "กำลังสร้าง PDF..." : "ดาวน์โหลดรายงานสรุป (.PDF)"}</span>
+              <span>{isExportingPdf ? "Generating PDF..." : "Report"}</span>
             </button>
           </div>
 
@@ -947,9 +953,11 @@ export default function Dashboard({
             style={{ 
               width: "794px", 
               height: "1123px", 
-              position: "absolute", 
-              left: "-9999px", 
-              top: "-9999px",
+              position: "fixed", 
+              left: "0px", 
+              top: "0px",
+              zIndex: -9999,
+              pointerEvents: "none",
               backgroundColor: "#ffffff"
             }}
             className="p-8 flex flex-col justify-between font-sans text-slate-800"
