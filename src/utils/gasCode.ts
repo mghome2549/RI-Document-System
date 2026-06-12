@@ -15,6 +15,14 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 8. กด การใช้งานจริง (Deploy) แล้วคัดลอกเว็บแอป URL (Web App URL) มาวางในช่องระบบตั้งค่าหน้าบ้าน React
  */
 
+// 📊 ลิงก์แบบฟอร์มประเมินความพึงพอใจ Google Form เพียงลิงก์เดียวที่ใช้เทคนิค Pre-filled Link (กรอกข้อมูลล่วงหน้า)
+// วิธีค้นหาและใช้ลิงก์นี้จาก Google Form ของคุณ:
+// 1. เปิดฟอร์มประเมินความพึงพอใจของคุณใน Google Forms
+// 2. กดที่ปุ่ม "จุดสามจุด" (มุมขวาบน) -> เลือก "รับลิงก์ที่กรอกไว้ล่วงหน้า" (Get pre-filled link)
+// 3. กรอกคะแนนจำลอง (เช่น กรอก "5" ในข้อคะแนนดาว) แล้วกดปุ่ม "รับลิงก์" (Get link) ด้านล่างสุด
+// 4. กด "คัดลอกลิงก์" แล้วนำมาวางแทนที่ลิงก์ตัวอย่างด้านล่างนี้ โดยให้ลบเลข 5 ตรงท้ายออก ให้เหลือแค่เครื่องหมาย "=" เท่านี้ระบบจะเติมคะแนนดาว 1-5 อัตโนมัติเมื่อคณาจารย์กดเลือกจากปุ่มในอีเมล!
+var baseFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111=";
+
 // เปิดสิทธิ์ CORS ให้การส่งข้อมูลแบบ JSON
 function responseJson(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
@@ -71,13 +79,19 @@ function doGet(e) {
 }
 
 /**
- * ฟังก์ชัน doPost(e) สำหรับรับคำสั่ง เพิ่ม, แก้ไข, ลบ และนำเข้า CSV ข้อมูลอาจารย์ใน Google Sheets
+ * ฟังก์ชัน doPost(e) สำหรับรับคำสั่ง เพิ่ม, แก้ไข, ลบ และนำเข้า CSV ข้อมูลอาจารย์ใน Google Sheets รวมถึงการส่งอีเมลแจ้งผลพิจารณา
  */
 function doPost(e) {
   try {
     var rawData = e.postData.contents;
     var payload = JSON.parse(rawData);
     var action = payload.action;
+    
+    // 📧 ประจุความต้องการแจ้งเมลแจ้งผลพิจารณาและแบบประเมินความพึงพอใจ
+    if (action === "SEND_EMAIL" || (!action && payload.recipientEmail)) {
+      var emailResult = sendAssessmentEmail(payload);
+      return responseJson(emailResult);
+    }
     
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("Database");
@@ -290,6 +304,158 @@ function doPost(e) {
       status: "error",
       message: "เกิดข้อผิดพลาดในการประมวลผลคำสั่ง: " + error.toString()
     });
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับประมวลผลและส่งอีเมลแจ้งผลพิจารณาเอกสารพร้อมปุ่มประเมินความพึงพอใจ 5 ดาว (Pre-filled Google Form)
+ * ⚠️ กฎเหล็กความปลอดภัย: ระบบจะส่งอีเมลจากฟังก์ชันนี้เท่านั้น ฟังก์ชันฐานข้อมูลอื่นๆ แอดมินจะไม่ทำการกระตุ้นให้ส่งอีเมลใดๆ
+ */
+function sendAssessmentEmail(payload) {
+  var recipient = payload.recipientEmail || "kittiwat.p@bu.ac.th";
+  var subject = "แจ้งผลการพิจารณาเอกสาร " + (payload.docNumber || "-") + " - " + (payload.subject || "-");
+  
+  // แปลงเนื้อความสลักลายเซ็นต์และรายละเอียดแบบ Plain Text
+  var plainText = payload.emailBody || "";
+  
+  // ออกแบบหน้าเค้าร่าง HTML ที่ตอบรับอุปกรณ์และกล่องดาวประเมิน Pre-filled เพียงลิงก์เดียวที่เสถียรที่สุด
+  var htmlBody = 
+    '<div style="font-family: \'Sarabun\', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; line-height: 1.6; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">' +
+      '<!-- Header Banner -->' +
+      '<div style="background-color: #003366; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">' +
+        '<h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold; font-family: \'Sarabun\', sans-serif;">' +
+          'แจ้งผลการพิจารณาเอกสาร / Notification of Document Consideration' +
+        '</h2>' +
+        '<p style="color: #cbd5e1; margin: 4px 0 0 0; font-size: 11.5px; font-weight:lighter;">' +
+          'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) มหาวิทยาลัยกรุงเทพ' +
+        '</p>' +
+      '</div>' +
+      
+      '<!-- Content Container -->' +
+      '<div style="background-color: #ffffff; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">' +
+        '<p style="font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 0;">' +
+          'เรียน ' + (payload.senderName || '-') + ' (' + (payload.department || '-') + ')' +
+        '</p>' +
+        
+        '<p style="font-size: 13.5px; color: #334155; margin-bottom: 20px; text-indent: 15px;">' +
+          'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) ขอแจ้งผลการพิจารณาเอกสาร โดยมีรายละเอียดดังต่อไปนี้:' +
+        '</p>' +
+
+        '<!-- Table Details -->' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">' +
+          '<tr style="background-color: #f8fafc;">' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; width: 40%; border-bottom: 1px solid #f1f5f9;">เลขที่อ้างอิง วพ.:</td>' +
+            '<td style="padding: 10px 14px; color: #003366; border-bottom: 1px solid #f1f5f9; font-weight: bold; font-family: monospace;">' + (payload.vphRefNo || '-') + '</td>' +
+          '</tr>' +
+          '<tr>' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">เลขที่หนังสือต้นทาง:</td>' +
+            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.docNumber || '-') + '</td>' +
+          '</tr>' +
+          '<tr style="background-color: #f8fafc;">' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">เรื่อง / ชื่อโครงการ:</td>' +
+            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' + (payload.subject || '-') + '</td>' +
+          '</tr>' +
+          '<tr>' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">ผลการพิจารณาจาก รอง วพ.:</td>' +
+            '<td style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' +
+              '<span style="background-color: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; padding: 2px 8px; border-radius: 9999px; font-size: 11.5px;">' + (payload.status || 'อนุมัติ') + '</span>' +
+            '</td>' +
+          '</tr>' +
+          '<tr style="background-color: #f8fafc;">' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">วันที่ดำเนินการส่งออก:</td>' +
+            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.outgoingDate || '-') + '</td>' +
+          '</tr>' +
+          '<tr>' +
+            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">หน่วยงานปลายทางที่รับช่วงต่อ:</td>' +
+            <td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.receiverName || '-') + ' (หน่วยงาน: ' + (payload.outgoingDept || '-') + ')</td>' +
+          '</tr>' +
+        '</table>' +
+
+        '<p style="font-size: 12px; color: #64748b; line-height: 1.5; font-style: italic; margin-bottom: 25px; padding: 10px 14px; background-color: #fafafa; border-left: 3px solid #cbd5e1;">' +
+          '(หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับหน่วยงานรับช่วงต่อเสร็จสิ้น เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)' +
+        '</p>' +
+
+        '<!-- 📊 Section: Google Form Pre-filled Star Rating -->' +
+        '<div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">' +
+          '<h3 style="color: #78350f; margin: 0 0 6px 0; font-size: 14px; font-weight: bold;">' +
+            '📊 แบบประเมินระดับความพึงพอใจการให้บริการ (วพ. Service Rating)' +
+          '</h3>' +
+          '<p style="color: #92400e; margin: 0 0 16px 0; font-size: 11.5px;">' +
+            'กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้<br/>(ระบบจะลิ้งก์ไปยัง Google Form ของสถาบัน โดยทำการระบุแต้มคะแนนล่วงหน้าอย่างรวดเร็วและเสถียรที่สุด)' +
+          '</p>' +
+
+          '<table style="width: 100%; max-width: 440px; margin: 0 auto; border-collapse: separate; border-spacing: 6px;">' +
+            '<tr>' +
+              '<!-- 🤬 1 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
+                '<a href="\' + baseFormUrl + \'1" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🤬</span>' +
+                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ปรับปรุง</span>' +
+                  '<span style="font-size: 12px; color: #be185d; display: block;">★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 🙁 2 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
+                '<a href="\' + baseFormUrl + \'2" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🙁</span>' +
+                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">พอใช้</span>' +
+                  '<span style="font-size: 12px; color: #d97706; display: block;">★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 😐 3 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
+                '<a href="\' + baseFormUrl + \'3" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">😐</span>' +
+                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ปานกลาง</span>' +
+                  '<span style="font-size: 12px; color: #eab308; display: block;">★★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 😊 4 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
+                '<a href="\' + baseFormUrl + \'4" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">😊</span>' +
+                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ดี</span>' +
+                  '<span style="font-size: 12px; color: #84cc16; display: block;">★★★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 🤩 5 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
+                '<a href="\' + baseFormUrl + \'5" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🤩</span>' +
+                  '<span style="font-size: 10px; font-weight: bold; color: #6b21a8; display: block; margin-bottom: 4px;">ดีเยี่ยม</span>' +
+                  '<span style="font-size: 12px; color: #a855f7; display: block;">★★★★★</span>' +
+                '</a>' +
+              '</td>' +
+            '</tr>' +
+          '</table>' +
+        '</div>' +
+
+        '<div style="font-size: 13px; color: #475569; border-top: 1px solid #f1f5f9; padding-top: 15px;">' +
+          '<p style="margin: 0 0 10px 0;">จึงเรียนมาเพื่อโปรดทราบ</p>' +
+          '<p style="margin: 0; font-weight: bold; color: #003366;">ขอแสดงความนับถือ</p>' +
+          '<p style="margin: 4px 0 0 0; font-weight: bold; color: #1e293b;">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)</p>' +
+          '<p style="margin: 2px 0 0 0; font-size: 11.5px; color: #64748b;">มหาวิทยาลัยกรุงเทพ (โทร. 2122 / อีเมล์: kittiwat.p@bu.ac.th)</p>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  try {
+    MailApp.sendEmail({
+      to: recipient,
+      subject: subject,
+      htmlBody: htmlBody,
+      body: plainText
+    });
+    return { status: "success", message: "ส่งอีเมลและแบบประเมินความพึงพอใจผ่าน MailApp เรียบร้อยแล้ว" };
+  } catch(e) {
+    try {
+      GmailApp.sendEmail(recipient, subject, plainText, {
+        htmlBody: htmlBody
+      });
+      return { status: "success", message: "ส่งอีเมลและแบบประเมินความพึงพอใจสำเร็จเรียบร้อยแล้ว (ทางเลือกสำรอง GmailApp)" };
+    } catch(err) {
+      return { status: "error", message: "ไม่สามารถส่งอีเมลได้เนื่องจากข้อผิดพลาด: " + err.toString() };
+    }
   }
 }
 `;

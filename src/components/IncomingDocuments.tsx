@@ -402,18 +402,18 @@ export default function IncomingDocuments({
       const docReceiver = formReceiver.trim() || "-";
       const docOutgoingDept = formOutgoingDepartment.trim() || "-";
 
-      // Compile exact revised formal Thai template (with redundant Google Form URLs stripped out to prioritize the interactive popup score card)
-      const appUrl = window.location.origin;
+      // Compile exact revised formal Thai template (using the new single pre-filled Google Form rating system)
+      const baseFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111=";
       const ratingLinks = `
 --------------------------------------------------
 📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
 โปรดคลิกลิงก์เลือกระดับดาวเพื่อบันทึกคะแนนประเมินความพึงพอใจของท่านลงในระบบโดยตรง:
 
-🤬 ปรับปรุง (1 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=1
-🙁 พอใช้ (2 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=2
-😐 ปานกลาง (3 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=3
-😊 ดี (4 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=4
-🤩 ดีเยี่ยม (5 ดาว): ${appUrl}?action=rate&docId=${payload.id}&rating=5
+🤬 ปรับปรุง (1 ดาว): ${baseFormUrl}1
+🙁 พอใช้ (2 ดาว): ${baseFormUrl}2
+😐 ปานกลาง (3 ดาว): ${baseFormUrl}3
+😊 ดี (4 ดาว): ${baseFormUrl}4
+🤩 ดีเยี่ยม (5 ดาว): ${baseFormUrl}5
 --------------------------------------------------`;
 
       const emailBody = `เรียน ${docSender} (${docDept})
