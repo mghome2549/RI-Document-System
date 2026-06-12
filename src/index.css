@@ -6,26 +6,59 @@
     margin: 0;
   }
 
+  /* 1. Reset standard elements to handle clean page boundaries */
   html, body {
+    width: 210mm !important;
+    height: 297mm !important;
     background-color: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Hide absolutely everything but the target report */
-  #app-root-container,
-  #app-root-container * {
+  /* 2. Hide unwanted components: sidebar, header, buttons, loaders, overlays */
+  #sidebar-container,
+  header,
+  footer,
+  #printing-overlay,
+  #dashboard-view > div:not(#executive-infographic-container),
+  .no-print {
+    display: none !important;
     visibility: hidden !important;
     height: 0 !important;
     overflow: hidden !important;
   }
 
-  /* Make the target report visible and formatted exactly for A4 */
-  #executive-infographic-container,
-  #executive-infographic-container * {
-    visibility: visible !important;
+  /* 3. Ensure the main container frames are clean and full size */
+  #app-root-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
 
+  #main-content,
+  #content-workspace,
+  #dashboard-view {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  /* 4. Format the Infographic exactly for exactly 1 page high quality A4 */
   #executive-infographic-container {
+    display: flex !important;
+    visibility: visible !important;
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -39,9 +72,13 @@
     overflow: hidden !important;
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
-    display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
     box-shadow: none !important;
+  }
+
+  /* Force child components to remain visible */
+  #executive-infographic-container * {
+    visibility: visible !important;
   }
 }

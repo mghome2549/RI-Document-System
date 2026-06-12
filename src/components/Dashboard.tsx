@@ -27,6 +27,7 @@ export default function Dashboard({
   // Report Ref and Dialog visibility
   const reportRef = useRef<HTMLDivElement>(null);
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Years range range calculation for the local dropdown
   const yearsRange = getAcademicYearsRange(currentYear, 5);
@@ -278,10 +279,26 @@ export default function Dashboard({
 
   const handlePrintVector = () => {
     setShowReportDialog(false);
-    // Let the browser transition render, then trigger the OS print engine
+    setIsPrinting(true);
+    // Add custom class to body to notify the global stylesheets
+    document.body.classList.add("printing-mode");
+
+    // 1. [หน่วงเวลาให้กราฟนิ่ง (Delay for Animation)]: delay 500ms to ensure React layout reflow complete & styles are applied
     setTimeout(() => {
       window.print();
-    }, 250);
+
+      // 2. Clear state and remove CSS helper class after browser print dialog is closed
+      const cleanupPrint = () => {
+        setIsPrinting(false);
+        document.body.classList.remove("printing-mode");
+        window.removeEventListener("afterprint", cleanupPrint);
+      };
+
+      window.addEventListener("afterprint", cleanupPrint);
+      
+      // Fallback cleanup timer in case of browser-specific print-system suspensions or afterprint quirks
+      setTimeout(cleanupPrint, 1000);
+    }, 500);
   };
 
   const handleExportHtml2Pdf = async () => {
@@ -1242,6 +1259,22 @@ export default function Dashboard({
                     >
                       ปิดหน้าต่าง
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ⚙️ Premium High-Quality Vector Print Loading Overlay */}
+            {isPrinting && (
+              <div id="printing-overlay" className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center z-[999999] text-white p-6 text-center font-sans">
+                <div className="max-w-md space-y-4">
+                  <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <h3 className="text-lg font-extrabold tracking-tight text-white">กำลังจัดเตรียมรายงานสำหรับเข้าสู่ระบบพิมพ์...</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed font-semibold">
+                    ระบบกำลังขยายขนาดเอกสาร ล็อคโครงสร้างสถิติ และเตรียมเรียกหน้าต่างพิมพ์ของเบราว์เซอร์ กรุณารอสักครู่ (พิมพ์ตรงระบบเวกเตอร์ความละเอียดสูงสุด)
+                  </p>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/10 text-amber-300 text-[10px] font-bold rounded-full border border-amber-400/20">
+                    <span>⚡ A4 Vector Print System Engine On</span>
                   </div>
                 </div>
               </div>
