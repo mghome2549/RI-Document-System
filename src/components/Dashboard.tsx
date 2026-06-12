@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -24,6 +24,10 @@ export default function Dashboard({
   currentYear,
   setActiveTab
 }: DashboardProps) {
+  // Report Ref and Dialog visibility
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+
   // Years range range calculation for the local dropdown
   const yearsRange = getAcademicYearsRange(currentYear, 5);
 
@@ -267,21 +271,38 @@ export default function Dashboard({
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = () => {
+    // Open the new premium Executive Print selector dialog
+    setShowReportDialog(true);
+  };
+
+  const handlePrintVector = () => {
+    setShowReportDialog(false);
+    // Let the browser transition render, then trigger the OS print engine
+    setTimeout(() => {
+      window.print();
+    }, 250);
+  };
+
+  const handleExportHtml2Pdf = async () => {
     if (isExportingPdf) return;
     setIsExportingPdf(true);
+    setShowReportDialog(false);
 
     try {
-      const element = document.getElementById("executive-infographic-container");
+      // 1. [หน่วงเวลาให้กราฟนิ่ง (Delay for Animation)]: delay 800ms for stable render of charts and animations
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // 2. [แก้ปัญหาการดึง Element]: ใช้ useRef
+      const element = reportRef.current;
       if (!element) {
         throw new Error("ไม่พบองค์ประกอบรายงาน Infographic");
       }
 
-      // Ensure the hidden container goes visible briefly, or is captured properly
       const canvas = await html2canvas(element, {
-        scale: 2, // crisp quality for text and bars
+        scale: 2.2, // extra crisp high density quality
         useCORS: true,
-        logging: true,
+        logging: false,
         backgroundColor: "#ffffff",
         allowTaint: true,
         width: 794,
@@ -292,7 +313,7 @@ export default function Dashboard({
         windowHeight: 1123,
       });
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -306,7 +327,7 @@ export default function Dashboard({
       pdf.save(`รายงานสรุปสถิติ_วพ_ประจำปีศึกษา_${selectedYear === "all" ? "ทั้งหมด" : selectedYear}.pdf`);
     } catch (error) {
       console.error("PDF export failed:", error);
-      alert("เกิดข้อผิดพลาดในการส่งออกรายงาน PDF กรุณาลองใหม่อีกครั้ง");
+      alert("เกิดข้อผิดพลาดในการส่งออกรายงาน PDF สำรอง กรุณาเลือกวิธี 'พิมพ์ออกเป็น PDF/บันทึกผ่านเบราว์เซอร์' แทนเพื่อความเสถียรสูงสุด");
     } finally {
       setIsExportingPdf(false);
     }
@@ -948,227 +969,284 @@ export default function Dashboard({
         });
 
         return (
-          <div 
-            id="executive-infographic-container" 
-            style={{ 
-              width: "794px", 
-              height: "1123px", 
-              position: "fixed", 
-              left: "0px", 
-              top: "0px",
-              zIndex: -9999,
-              pointerEvents: "none",
-              backgroundColor: "#ffffff"
-            }}
-            className="p-8 flex flex-col justify-between font-sans text-slate-800"
-          >
-            <div className="space-y-6">
-              {/* Header Block with Navy theme */}
-              <div className="border-b-4 border-[#003366] pb-4 flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">🏫</span>
-                    <span className="text-xs font-extrabold text-[#003366]/80 uppercase tracking-wider font-sans">
-                      สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) • มหาวิทยาลัยกรุงเทพ
-                    </span>
-                  </div>
-                  <h1 className="text-xl font-extrabold text-[#003366] leading-tight">
-                    รายงานสรุปสถิติผลการดำเนินงาน ระบบแจ้งผลการพิจารณาเอกสาร วพ.
-                  </h1>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Executive Operations & Satisfaction Rating Summary Report
-                  </p>
-                </div>
-                
-                <div className="text-right shrink-0">
-                  <div className="bg-[#003366]/5 px-3 py-1.5 rounded-lg border border-[#003366]/15">
-                    <p className="text-[10px] font-bold text-slate-500 leading-none">ประจำปีการศึกษา</p>
-                    <p className="text-base font-black text-[#003366] mt-1 font-mono">
-                      {selectedYear === "all" ? "ทุกปีการศึกษา" : `ปีการศึกษา ${selectedYear}`}
+          <>
+            <div 
+              id="executive-infographic-container"
+              ref={reportRef}
+              style={{ 
+                width: "794px", 
+                height: "1123px", 
+                position: "fixed", 
+                left: "0px", 
+                top: "0px",
+                zIndex: -9999,
+                pointerEvents: "none",
+                backgroundColor: "#ffffff"
+              }}
+              className="p-8 flex flex-col justify-between font-sans text-slate-800"
+            >
+              <div className="space-y-6">
+                {/* Header Block with Navy theme */}
+                <div className="border-b-4 border-[#003366] pb-4 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xl">🏫</span>
+                      <span className="text-xs font-extrabold text-[#003366]/80 uppercase tracking-wider font-sans">
+                        สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) • มหาวิทยาลัยกรุงเทพ
+                      </span>
+                    </div>
+                    <h1 className="text-xl font-extrabold text-[#003366] leading-tight">
+                      รายงานสรุปสถิติผลการดำเนินงาน ระบบแจ้งผลการพิจารณาเอกสาร วพ.
+                    </h1>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Executive Operations & Satisfaction Rating Summary Report
                     </p>
                   </div>
-                  <div className="text-[9px] text-slate-400 font-bold mt-1.5 font-mono">
-                    วันที่ส่งออก: {formatThaiDate(new Date().toISOString())}
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Core Executive Summary Text block */}
-              <div className="bg-[#003366]/5 p-3.5 rounded-xl border border-[#003366]/10 text-xs leading-relaxed text-[#071D33] font-medium leading-relaxed">
-                <strong>บทสรุปผู้บริหาร:</strong> ในปีการศึกษา {selectedYear === "all" ? "ทั้งหมด" : selectedYear} ระบบได้อำนวยความสะดวกในการบริหารจัดการและคุมเอกสารเข้า-ออก คิดเป็นสัดส่วนความสำเร็จสำเร็จสะสม {successRate}% โดยสถิติที่สำคัญมีโครงสร้างดังแสดงในรายงานสรุปภาพรวมฉบับนี้
-              </div>
-
-              {/* Core KPI Cards Block */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">เอกสารเสนอพิจารณารวม</span>
-                  <span className="text-xl font-bold font-mono text-[#003366] block mt-1">{inboxDocs.length}</span>
-                  <span className="text-[9px] text-[#003366]/60 font-bold">รายการเอกสารเข้า</span>
-                </div>
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">อนุมัติ / แล้วเสร็จ</span>
-                  <span className="text-xl font-bold font-mono text-emerald-700 block mt-1">{incomingApprovedCount}</span>
-                  <span className="text-[9px] text-emerald-600 font-bold">อัตราสัดส่วน {successRate}%</span>
-                </div>
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">อยู่ระหว่างดำเนินการ</span>
-                  <span className="text-xl font-bold font-mono text-amber-600 block mt-1">{inboxPendingCount}</span>
-                  <span className="text-[9px] text-amber-500 font-bold">อยู่ระหว่างตรวจเอกสาร</span>
-                </div>
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">ค้างเกินกำหนด (SLA)</span>
-                  <span className="text-xl font-bold font-mono text-rose-700 block mt-1">{slaDelayedCount}</span>
-                  <span className="text-[9px] text-rose-500 font-bold">เกินกำหนด 5 วัน</span>
-                </div>
-              </div>
-
-              {/* Insights charts section (2 column layout) */}
-              <div className="grid grid-cols-2 gap-6 pt-2">
-                {/* Delivery channels */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider mb-0.5">ช่องทางส่งมอบเอกสารราชการ</h3>
-                    <p className="text-[10px] text-slate-400 mb-3 font-semibold">สรุปตามประเภทโครงสร้างนำเสนอเข้าหลัก (Inbox Volume)</p>
-                  </div>
                   
-                  <div className="space-y-4 my-2">
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
-                        <span>ช่องทางอีเมล (Inbox-Email)</span>
-                        <span className="font-mono">{emailCount} รายการ ({chartTotal > 0 ? Math.round((emailCount / chartTotal) * 100) : 0}%)</span>
+                  <div className="text-right shrink-0">
+                    <div className="bg-[#003366]/5 px-3 py-1.5 rounded-lg border border-[#003366]/15">
+                      <p className="text-[10px] font-bold text-slate-500 leading-none">ประจำปีการศึกษา</p>
+                      <p className="text-base font-black text-[#003366] mt-1 font-mono">
+                        {selectedYear === "all" ? "ทุกปีการศึกษา" : `ปีการศึกษา ${selectedYear}`}
+                      </p>
+                    </div>
+                    <div className="text-[9px] text-slate-400 font-bold mt-1.5 font-mono">
+                      วันที่ส่งออก: {formatThaiDate(new Date().toISOString())}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Core Executive Summary Text block */}
+                <div className="bg-[#003366]/5 p-3.5 rounded-xl border border-[#003366]/10 text-xs leading-relaxed text-[#071D33] font-medium leading-relaxed">
+                  <strong>บทสรุปผู้บริหาร:</strong> ในปีการศึกษา {selectedYear === "all" ? "ทั้งหมด" : selectedYear} ระบบได้อำนวยความสะดวกในการบริหารจัดการและคุมเอกสารเข้า-ออก คิดเป็นสัดส่วนความสำเร็จสำเร็จสะสม {successRate}% โดยสถิติที่สำคัญมีโครงสร้างดังแสดงในรายงานสรุปภาพรวมฉบับนี้
+                </div>
+
+                {/* Core KPI Cards Block */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">เอกสารเสนอพิจารณารวม</span>
+                    <span className="text-xl font-bold font-mono text-[#003366] block mt-1">{inboxDocs.length}</span>
+                    <span className="text-[9px] text-[#003366]/60 font-bold">รายการเอกสารเข้า</span>
+                  </div>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">อนุมัติ / แล้วเสร็จ</span>
+                    <span className="text-xl font-bold font-mono text-emerald-700 block mt-1">{incomingApprovedCount}</span>
+                    <span className="text-[9px] text-emerald-600 font-bold">อัตราสัดส่วน {successRate}%</span>
+                  </div>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">อยู่ระหว่างดำเนินการ</span>
+                    <span className="text-xl font-bold font-mono text-amber-600 block mt-1">{inboxPendingCount}</span>
+                    <span className="text-[9px] text-amber-500 font-bold">อยู่ระหว่างตรวจเอกสาร</span>
+                  </div>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">ค้างเกินกำหนด (SLA)</span>
+                    <span className="text-xl font-bold font-mono text-rose-700 block mt-1">{slaDelayedCount}</span>
+                    <span className="text-[9px] text-rose-500 font-bold">เกินกำหนด 5 วัน</span>
+                  </div>
+                </div>
+
+                {/* Insights charts section (2 column layout) */}
+                <div className="grid grid-cols-2 gap-6 pt-2">
+                  {/* Delivery channels */}
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider mb-0.5">ช่องทางส่งมอบเอกสารราชการ</h3>
+                      <p className="text-[10px] text-slate-400 mb-3 font-semibold">สรุปตามประเภทโครงสร้างนำเสนอเข้าหลัก (Inbox Volume)</p>
+                    </div>
+                    
+                    <div className="space-y-4 my-2">
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
+                          <span>ช่องทางอีเมล (Inbox-Email)</span>
+                          <span className="font-mono">{emailCount} รายการ ({chartTotal > 0 ? Math.round((emailCount / chartTotal) * 100) : 0}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-150 h-5 rounded-md overflow-hidden">
+                          <div className="bg-[#003366] h-full" style={{ width: `${chartTotal > 0 ? (emailCount / chartTotal) * 100 : 0}%` }} />
+                        </div>
                       </div>
-                      <div className="w-full bg-slate-150 h-5 rounded-md overflow-hidden">
-                        <div className="bg-[#003366] h-full" style={{ width: `${chartTotal > 0 ? (emailCount / chartTotal) * 100 : 0}%` }} />
+                      
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
+                          <span>เอกสารกระดาษ / แฟ้มเสนอ (Paper & Files)</span>
+                          <span className="font-mono">{paperCount} รายการ ({chartTotal > 0 ? Math.round((paperCount / chartTotal) * 100) : 0}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-150 h-5 rounded-md overflow-hidden">
+                          <div className="bg-amber-500 h-full" style={{ width: `${chartTotal > 0 ? (paperCount / chartTotal) * 100 : 0}%` }} />
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-[10.5px] font-bold text-slate-600">
-                        <span>เอกสารกระดาษ / แฟ้มเสนอ (Paper & Files)</span>
-                        <span className="font-mono">{paperCount} รายการ ({chartTotal > 0 ? Math.round((paperCount / chartTotal) * 100) : 0}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-150 h-5 rounded-md overflow-hidden">
-                        <div className="bg-amber-500 h-full" style={{ width: `${chartTotal > 0 ? (paperCount / chartTotal) * 100 : 0}%` }} />
-                      </div>
-                    </div>
+                    <p className="text-[9px] text-slate-400 mt-2 font-bold select-none">• การนำส่งทางอิเล็กทรอนิกส์ช่วยร่นระยะดำเนินการได้กว่า 50%</p>
                   </div>
-                  
-                  <p className="text-[9px] text-slate-400 mt-2 font-bold select-none">• การนำส่งทางอิเล็กทรอนิกส์ช่วยร่นระยะดำเนินการได้กว่า 50%</p>
+
+                  {/* Department stats */}
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider mb-0.5">ภาระงานสูงสุด 5 ลำดับแรก</h3>
+                      <p className="text-[10px] text-slate-400 mb-3 font-semibold">ปริมาณคุมเอกสารจำแนกตามสัดส่วนหน่วยงานต้นสังกัด</p>
+                    </div>
+
+                    {topDepartments.length > 0 ? (
+                      <div className="space-y-2 my-1">
+                        {topDepartments.slice(0, 5).map((dept, idx) => {
+                          const percentage = total > 0 ? Math.round((dept.count / total) * 100) : 0;
+                          const colors = ["bg-[#003366]", "bg-[#1E3A8A]", "bg-[#3B82F6]", "bg-[#60A5FA]", "bg-[#93C5FD]"];
+                          return (
+                            <div key={dept.name} className="space-y-0.5">
+                              <div className="flex justify-between items-center text-[9px] font-bold text-slate-600">
+                                <span className="truncate max-w-[150px]">{dept.name}</span>
+                                <span className="font-mono">{dept.count} รายการ ({percentage}%)</span>
+                              </div>
+                              <div className="w-full bg-slate-150 h-4 rounded-md overflow-hidden">
+                                <div className={`${colors[idx % colors.length]} h-full`} style={{ width: `${percentage}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center text-[10px] text-slate-400 py-6 font-medium">ไม่มีข้อมูลหน่วยงานเสนอเล่ม</div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Department stats */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200/80 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider mb-0.5">ภาระงานสูงสุด 5 ลำดับแรก</h3>
-                    <p className="text-[10px] text-slate-400 mb-3 font-semibold">ปริมาณคุมเอกสารจำแนกตามสัดส่วนหน่วยงานต้นสังกัด</p>
-                  </div>
-
-                  {topDepartments.length > 0 ? (
-                    <div className="space-y-2 my-1">
-                      {topDepartments.slice(0, 5).map((dept, idx) => {
-                        const percentage = total > 0 ? Math.round((dept.count / total) * 100) : 0;
-                        const colors = ["bg-[#003366]", "bg-[#1E3A8A]", "bg-[#3B82F6]", "bg-[#60A5FA]", "bg-[#93C5FD]"];
-                        return (
-                          <div key={dept.name} className="space-y-0.5">
-                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-600">
-                              <span className="truncate max-w-[150px]">{dept.name}</span>
-                              <span className="font-mono">{dept.count} รายการ ({percentage}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-150 h-4 rounded-md overflow-hidden">
-                              <div className={`${colors[idx % colors.length]} h-full`} style={{ width: `${percentage}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center text-[10px] text-slate-400 py-6 font-medium">ไม่มีข้อมูลหน่วยงานเสนอเล่ม</div>
-                  )}
-                </div>
-              </div>
-
-              {/* ⭐️ Customer/Professor Satisfaction Ratings Level Column */}
-              <div className="bg-white p-4.5 rounded-xl border border-slate-200/80">
-                <div className="flex items-center justify-between mb-3 border-b border-slate-150 pb-2">
-                  <div>
-                    <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider">
-                      ผลประเมินความพึงพอใจการให้บริการ (วพ. Service Rating Score)
-                    </h3>
-                    <p className="text-[9px] text-slate-400 font-bold mt-0.5 font-sans">
-                      ความพึงพอใจโดยภาพรวมของอาจารย์และนักวิจัยผู้ขอความอนุเคราะห์บริการ
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <p className="text-[9px] text-slate-400 font-bold font-sans">คะแนนเฉลี่ยสุทธิ</p>
-                      <p className="text-lg font-black text-[#003366] font-mono leading-none mt-0.5">
-                        {averageRatingScore} <span className="text-xs font-bold text-slate-400 font-sans">/ 5.00</span>
+                {/* ⭐️ Customer/Professor Satisfaction Ratings Level Column */}
+                <div className="bg-white p-4.5 rounded-xl border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-3 border-b border-slate-150 pb-2">
+                    <div>
+                      <h3 className="text-xs font-extrabold text-[#003366] uppercase tracking-wider">
+                        ผลประเมินความพึงพอใจการให้บริการ (วพ. Service Rating Score)
+                      </h3>
+                      <p className="text-[9px] text-slate-400 font-bold mt-0.5 font-sans">
+                        ความพึงพอใจโดยภาพรวมของอาจารย์และนักวิจัยผู้ขอความอนุเคราะห์บริการ
                       </p>
                     </div>
-                    <div className="flex text-amber-400 text-base">
-                      {"★".repeat(Math.round(parseFloat(averageRatingScore)))}{"☆".repeat(5 - Math.round(parseFloat(averageRatingScore)))}
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-400 font-bold font-sans">คะแนนเฉลี่ยสุทธิ</p>
+                        <p className="text-lg font-black text-[#003366] font-mono leading-none mt-0.5">
+                          {averageRatingScore} <span className="text-xs font-bold text-slate-400 font-sans">/ 5.00</span>
+                        </p>
+                      </div>
+                      <div className="flex text-amber-400 text-base">
+                        {"★".repeat(Math.round(parseFloat(averageRatingScore)))}{"☆".repeat(5 - Math.round(parseFloat(averageRatingScore)))}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Satisfaction 1 to 5 distribution from left to right */}
-                <div className="grid grid-cols-5 gap-3.5 pt-1.5">
-                  {[
-                    { val: 1, label: "ปรับปรุง (1)", emoji: "🤬", color: "bg-red-500", text: "ปรับปรุง" },
-                    { val: 2, label: "พอใช้ (2)", emoji: "🙁", color: "bg-orange-400", text: "พอใช้" },
-                    { val: 3, label: "ปานกลาง (3)", emoji: "😐", color: "bg-amber-400", text: "ปานกลาง" },
-                    { val: 4, label: "ดี (4)", emoji: "😊", color: "bg-emerald-500", text: "ดี" },
-                    { val: 5, label: "ดีเยี่ยม (5)", emoji: "🤩", color: "bg-[#003366]", text: "ดีเยี่ยม" }
-                  ].map((item) => {
-                    const count = ratingDistribution[item.val as 1|2|3|4|5] || 0;
-                    const percentage = totalRatingsCount > 0 ? Math.round((count / totalRatingsCount) * 100) : 0;
-                    return (
-                      <div key={item.val} className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-center flex flex-col justify-between">
-                        <div>
-                          <span className="text-lg block mb-0.5">{item.emoji}</span>
-                          <span className="text-[9px] font-extrabold text-[#003366] block leading-tight">{item.label}</span>
-                        </div>
-                        <div className="mt-2.5">
-                          <span className="text-xs font-black text-slate-700 font-mono block leading-none">{count} <span className="text-[8px] font-bold text-slate-400">ครั้ง</span></span>
-                          {/* mini progress bar */}
-                          <div className="w-full bg-slate-200 h-1 rounded-full mt-1.5 overflow-hidden">
-                            <div className={`${item.color} h-full`} style={{ width: `${percentage}%` }} />
+                  {/* Satisfaction 1 to 5 distribution from left to right */}
+                  <div className="grid grid-cols-5 gap-3.5 pt-1.5">
+                    {[
+                      { val: 1, label: "ปรับปรุง (1)", emoji: "🤬", color: "bg-red-500", text: "ปรับปรุง" },
+                      { val: 2, label: "พอใช้ (2)", emoji: "🙁", color: "bg-orange-400", text: "พอใช้" },
+                      { val: 3, label: "ปานกลาง (3)", emoji: "😐", color: "bg-amber-400", text: "ปานกลาง" },
+                      { val: 4, label: "ดี (4)", emoji: "😊", color: "bg-emerald-500", text: "ดี" },
+                      { val: 5, label: "ดีเยี่ยม (5)", emoji: "🤩", color: "bg-[#003366]", text: "ดีเยี่ยม" }
+                    ].map((item) => {
+                      const count = ratingDistribution[item.val as 1|2|3|4|5] || 0;
+                      const percentage = totalRatingsCount > 0 ? Math.round((count / totalRatingsCount) * 100) : 0;
+                      return (
+                        <div key={item.val} className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-center flex flex-col justify-between">
+                          <div>
+                            <span className="text-lg block mb-0.5">{item.emoji}</span>
+                            <span className="text-[9px] font-extrabold text-[#003366] block leading-tight">{item.label}</span>
                           </div>
-                          <span className="text-[8px] text-slate-400 font-bold block mt-1 font-mono">{percentage}%</span>
+                          <div className="mt-2.5">
+                            <span className="text-xs font-black text-slate-700 font-mono block leading-none">{count} <span className="text-[8px] font-bold text-slate-400">ครั้ง</span></span>
+                            {/* mini progress bar */}
+                            <div className="w-full bg-slate-200 h-1 rounded-full mt-1.5 overflow-hidden">
+                              <div className={`${item.color} h-full`} style={{ width: `${percentage}%` }} />
+                            </div>
+                            <span className="text-[8px] text-slate-400 font-bold block mt-1 font-mono">{percentage}%</span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-[8.5px] text-slate-400 font-bold mt-3.5">
+                    <span>จำนวนผู้ตอบแบบสำรวจความพึงพอใจทั้งหมดสะสม: {totalRatingsCount} คณาจารย์</span>
+                    <span>เกณฑ์เป้าหมายดัชนีชี้วัดองค์กร (KPI): ≥ 4.50 คะแนนดาว</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Executive Stamp area */}
+              <div className="border-t border-slate-200 pt-4 flex items-end justify-between text-[10px] text-slate-500">
+                <div>
+                  <p className="font-extrabold text-slate-600 block">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) มหาวิทยาลัยกรุงเทพ</p>
+                  <p className="text-[8px] text-slate-400 mt-1 font-semibold leading-none">
+                    ระบบสารบรรณและคุมเอกสารอิเล็กทรอนิกส์ • พัฒนาด้วยเทคโนโลยีคลาวด์และ Google Workspace API
+                  </p>
                 </div>
                 
-                <div className="flex justify-between items-center text-[8.5px] text-slate-400 font-bold mt-3.5">
-                  <span>จำนวนผู้ตอบแบบสำรวจความพึงพอใจทั้งหมดสะสม: {totalRatingsCount} คณาจารย์</span>
-                  <span>เกณฑ์เป้าหมายดัชนีชี้วัดองค์กร (KPI): ≥ 4.50 คะแนนดาว</span>
+                <div className="text-center w-[200px]">
+                  <p className="text-[9px] font-bold text-slate-400 mb-9 leading-none">ผู้ประเมินรับเสนอรายงานและตรวจรับรองความถูกต้อง</p>
+                  <div className="border-b border-slate-300 w-[160px] mx-auto mb-1.5" />
+                  <p className="text-[9.5px] font-extrabold text-slate-700 leading-none">
+                    ( ............................................................ )
+                  </p>
+                  <p className="text-[8px] text-slate-400 font-bold mt-1.5 leading-none">
+                    รองอธิการบดีสายวิจัยและพัฒนานวัตกรรมการศึกษา
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Footer Executive Stamp area */}
-            <div className="border-t border-slate-200 pt-4 flex items-end justify-between text-[10px] text-slate-500">
-              <div>
-                <p className="font-extrabold text-slate-600 block">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) มหาวิทยาลัยกรุงเทพ</p>
-                <p className="text-[8px] text-slate-400 mt-1 font-semibold leading-none">
-                  ระบบสารบรรณและคุมเอกสารอิเล็กทรอนิกส์ • พัฒนาด้วยเทคโนโลยีคลาวด์และ Google Workspace API
-                </p>
+            {/* 📊 Premium Report Helper Dialog/Modal */}
+            {showReportDialog && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans animate-fadeIn">
+                <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden text-slate-800 p-6 space-y-6 relative">
+                  <div className="flex items-start gap-3">
+                    <div className="p-3 bg-[#003366]/10 text-[#003366] rounded-xl text-xl shrink-0">
+                      📊
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900">ตัวช่วยจัดพิมพ์รายงาน วพ. (Report Wizard)</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">โปรดเลือกวิธีการส่งออกรายงานสรุปภาพรวมผู้บริหารแบบ 1 หน้ากระดาษ A4</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Method 1: Print Vector PDF (Highly Recommended) */}
+                    <button
+                      onClick={handlePrintVector}
+                      className="w-full p-4 bg-[#003366]/5 hover:bg-[#003366]/10 text-[#003366] rounded-xl border border-[#003366]/15 hover:border-[#003366]/30 text-left transition-all flex items-start gap-3.5 active:scale-[0.98] cursor-pointer group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform shrink-0">🖨️</span>
+                      <div className="flex-1">
+                        <span className="text-xs font-black block text-slate-900">บันทึกเป็น PDF ผ่านเบราว์เซอร์ (Vector Line - แนะนำสุงสุด)</span>
+                        <span className="text-[10px] text-slate-500 block mt-1 leading-normal font-medium">ใช้วิธีเรียก Print ของเบราว์เซอร์โดยตรง ตัวอักษรภาษาไทยคมเฉียบแบบเวกเตอร์แท้ 100% ไม่เบลอ ไม่ต้องลงโปรแกรมเพิ่ม</span>
+                      </div>
+                    </button>
+
+                    {/* Method 2: Image Canvas PDF Generation (Fallback) */}
+                    <button
+                      onClick={handleExportHtml2Pdf}
+                      disabled={isExportingPdf}
+                      className="w-full p-4 bg-amber-50 hover:bg-amber-100/80 text-amber-900 rounded-xl border border-amber-200/60 hover:border-amber-300 text-left transition-all flex items-start gap-3.5 active:scale-[0.98] cursor-pointer disabled:opacity-50 group"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition-transform shrink-0">🖼️</span>
+                      <div className="flex-1">
+                        <span className="text-xs font-black block text-amber-950">ดาวน์โหลดด้วยกราฟิกจำลอง (AI Canvas Image PDF - สำรอง)</span>
+                        <span className="text-[10px] text-slate-500 block mt-1 leading-normal font-medium">รอระบบหน่วงเวลา 800ms เพื่อประมวลผลแอนิเมชันของแผนภูมิจนหยุดนิ่ง แล้วถ่ายภาพสัญลักษณ์อัดแน่นลงเอกสาร PDF</span>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowReportDialog(false)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition active:scale-95 cursor-pointer"
+                    >
+                      ปิดหน้าต่าง
+                    </button>
+                  </div>
+                </div>
               </div>
-              
-              <div className="text-center w-[200px]">
-                <p className="text-[9px] font-bold text-slate-400 mb-9 leading-none">ผู้ประเมินรับเสนอรายงานและตรวจรับรองความถูกต้อง</p>
-                <div className="border-b border-slate-300 w-[160px] mx-auto mb-1.5" />
-                <p className="text-[9.5px] font-extrabold text-slate-700 leading-none">
-                  ( ............................................................ )
-                </p>
-                <p className="text-[8px] text-slate-400 font-bold mt-1.5 leading-none">
-                  รองอธิการบดีสายวิจัยและพัฒนานวัตกรรมการศึกษา
-                </p>
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         );
       })()}
     </div>
