@@ -81,7 +81,7 @@ export default function AuthScreen({ onSignIn, showTimeoutAlert }: AuthScreenPro
               <AlertCircle size={16} className="shrink-0 text-amber-400 mt-0.5" />
               <div>
                 <span className="font-bold block mb-0.5 text-white">ออกจากระบบอัตโนมัติ</span>
-                ไม่มีการใช้งานหน้าจอนานเกิน 1 นาที เพื่อความปลอดภัยของข้อมูลและสิทธิ์แอดมิน ระบบจึงนำท่านกลับสู่หน้าลงชื่อเข้าใช้งาน
+                ไม่มีการใช้งานหน้าจอนานเกิน 60 นาที เพื่อความปลอดภัยของข้อมูลและสิทธิ์แอดมิน ระบบจึงนำท่านกลับสู่หน้าลงชื่อเข้าใช้งาน
               </div>
             </div>
           )}
