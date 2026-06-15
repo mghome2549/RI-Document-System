@@ -388,7 +388,8 @@ export default function IncomingDocuments({
     }
 
     // Direct automated email composition, PDF attachment uploads, and backend transaction execution simultaneously
-    if (formRecipientEmail.trim()) {
+    // ส่งอีเมลจำกัดเฉพาะประเภทเอกสาร "เอกสาร" (Paper/กระดาษ) เท่านั้น
+    if (formRecipientEmail.trim() && formVpDocType === "เอกสาร") {
       const riRefNoFinal = editingDoc
         ? formatRiRefNo(editingDoc.riRefNo || editingDoc.vopId || editingDoc.number, editingDoc.academicYear)
         : "(จะสร้างเลขที่อ้างอิง วพ. อัตโนมัติเมื่อกดบันทึก)";
@@ -1384,15 +1385,31 @@ Email: kittiwat.p@bu.ac.th
 
                   {/* Input 1: Recipient Email */}
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">อีเมลผู้รับ/อาจารย์ผู้ส่งเรื่อง (Recipient Email)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">
+                      อีเมลผู้รับ/อาจารย์ผู้ส่งเรื่อง (Recipient Email)
+                    </label>
                     <input
                       id="formRecipientEmail-input"
                       type="email"
-                      value={formRecipientEmail}
+                      value={formVpDocType === "เอกสาร" ? formRecipientEmail : ""}
                       onChange={(e) => setFormRecipientEmail(e.target.value)}
-                      placeholder="เช่น owner@bu.ac.th"
-                      className="w-full text-xs h-9 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      disabled={formVpDocType !== "เอกสาร"}
+                      placeholder={formVpDocType === "เอกสาร" ? "เช่น owner@bu.ac.th" : "ปิดการส่งอีเมลสำหรับประเภท e-mail"}
+                      className={`w-full text-xs h-9 px-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                        formVpDocType !== "เอกสาร" 
+                          ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed" 
+                          : "bg-white text-slate-800 border-slate-200"
+                      }`}
                     />
+                    {formVpDocType !== "เอกสาร" ? (
+                      <span className="text-[10px] text-amber-600 block mt-1 font-semibold font-sans">
+                        ⚠️ ระบบจะส่งอีเมลเฉพาะเอกสาร "Paper/กระดาษ" เท่านั้น (ประเภท e-mail จะไม่ส่งซ้ำซ้อน)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-450 block mt-1 font-sans">
+                        📧 กรอกอีเมลเพื่อส่งแจ้งเตือนผลพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว
+                      </span>
+                    )}
                   </div>
 
                   {/* Input 2: PDF File Attachment */}
