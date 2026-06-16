@@ -143,6 +143,7 @@ export async function fetchProfessors(): Promise<Professor[]> {
 
 /**
  * Add or update a professor (sync with Supabase and legacy fallbacks - NO Apps Script / NO email dispatch)
+ * [SAFE DATABASE MODE]: ห้ามติดตั้งระบบส่งเมลพ่วงหรือเชื่อม Apps Script ในฟังก์ชันนี้เด็ดขาด ป้องกันการสแปมสิทธิ์อาจารย์แบบไร้รอยต่อ
  */
 export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: string }): Promise<Professor> {
   const isEditing = !!professor.id;
@@ -218,6 +219,7 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
 
 /**
  * Bulk import multiple professors from CSV (direct database uploads with absolutely NO email alerts/Apps Script)
+ * [SAFE DATABASE MODE]: ห้ามติดตั้งสคริปต์ส่งการแจ้งเตือนสิทธิ์หรืออีเมลยืนยันผลเด็ดขาดเมื่อนำเข้าไฟล์ CSV ในปริมาณมาก
  */
 export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[]): Promise<{ upsertedCount: number; insertedCount: number }> {
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY_PROFS);
@@ -321,6 +323,7 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
 
 /**
  * Delete a professor (direct database delete, absolutely silent with NO email trigger / NO Google Apps Script)
+ * [SAFE DATABASE MODE]: ห้ามเชื่อมการเรียก API หรือ Email เพื่อแจ้งเตือนสิทธิ์การลบอาจารย์เด็ดขาด ดำเนินการแบบเงียบๆ เท่านั้น
  */
 export async function deleteProfessor(id: string): Promise<void> {
   // 1. Sync LocalStorage

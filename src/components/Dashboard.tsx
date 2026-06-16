@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -33,6 +33,42 @@ export default function Dashboard({
   const yearsRange = getAcademicYearsRange(currentYear, 5);
 
   const [isExporting, setIsExporting] = useState(false);
+
+  // Load and merge local and db evaluations for real-time calculation
+  const [dbEvaluations, setDbEvaluations] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchEvaluations = async () => {
+      let logs: any[] = [];
+      if (isFirebaseConfigured && db) {
+        try {
+          const snap = await getDocs(collection(db, "document_logs"));
+          snap.forEach((d) => {
+            logs.push({ id: d.id, ...d.data() });
+          });
+        } catch (err) {
+          console.error("Failed to fetch evaluations from cloud, using fallback:", err);
+        }
+      }
+      try {
+        const storedLogsKey = "bu_document_logs";
+        const storedLogs = localStorage.getItem(storedLogsKey);
+        if (storedLogs) {
+          const localLogs = JSON.parse(storedLogs);
+          localLogs.forEach((item: any) => {
+            const exists = logs.some((l) => l.id === item.id);
+            if (!exists) {
+              logs.push(item);
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Local storage fallback logs read error:", err);
+      }
+      setDbEvaluations(logs);
+    };
+    fetchEvaluations();
+  }, [documents]);
 
   const handleExportCombineExcel = async () => {
     if (isExporting) return;
@@ -359,6 +395,47 @@ export default function Dashboard({
 
   const inboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.INBOX);
   const outboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.OUTBOX);
+
+  // Combine unique evaluations by document ID to make calculation perfectly real-time
+  const evaluatedDocsList = filteredDocs.filter((d) => typeof d.serviceRating === "number" && d.serviceRating > 0);
+  const combinedEvaluationsMap = new Map<string, number>();
+
+  // Add ratings from visible documents (for the current academicYear if filtered)
+  evaluatedDocsList.forEach(d => {
+    if (d.id && d.serviceRating) {
+      combinedEvaluationsMap.set(d.id, d.serviceRating);
+    }
+  });
+
+  // Blend in evaluations from Firestore document_logs collection and fallbacks
+  dbEvaluations.forEach(log => {
+    // If we have rating_score in the log
+    if (log.id && typeof log.rating_score === "number" && log.rating_score > 0) {
+      if (selectedYear !== "all") {
+        // Only count if document is for the currently selected academic year
+        const matchesYear = documents.some(d => d.id === log.id && d.academicYear === selectedYear);
+        if (matchesYear) {
+          combinedEvaluationsMap.set(log.id, log.rating_score);
+        }
+      } else {
+        combinedEvaluationsMap.set(log.id, log.rating_score);
+      }
+    }
+  });
+
+  const uniqueEvaluations = Array.from(combinedEvaluationsMap.entries()).map(([id, score]) => ({ id, score }));
+  const totalEvaluationsCount = uniqueEvaluations.length;
+  const averageEvaluationScore = totalEvaluationsCount > 0
+    ? (uniqueEvaluations.reduce((acc, curr) => acc + curr.score, 0) / totalEvaluationsCount).toFixed(2)
+    : "0.00";
+
+  const evaluationDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  uniqueEvaluations.forEach((item) => {
+    const scoreVal = item.score as 1 | 2 | 3 | 4 | 5;
+    if (evaluationDistribution[scoreVal] !== undefined) {
+      evaluationDistribution[scoreVal]++;
+    }
+  });
 
   // Helper to calculate days pending/stuck
   const getDaysPending = (receiveDateStr?: string) => {
@@ -729,10 +806,28 @@ export default function Dashboard({
             spacer
           </div>
         </div>
+
+        {/* KPI 6: คะแนนความพึงพอใจเฉลี่ย และ จำนวนผู้ตอบแบบประเมิน */}
+        <div className="bg-gradient-to-br from-amber-50 to-yellow-100 border border-amber-200 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+          <div className="flex items-start justify-between w-full">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-extrabold text-amber-600 uppercase tracking-widest block truncate overflow-hidden">ความพึงพอใจเฉลี่ย</span>
+              <span className="text-lg md:text-xl font-bold font-mono text-amber-950 mt-1 block">
+                ⭐ {averageEvaluationScore} <span className="text-[10px] font-bold text-amber-800/60 font-sans">/ 5.00</span>
+              </span>
+            </div>
+            <span className="p-1.5 bg-amber-100/80 text-[#D4AF37] border border-amber-200 rounded-xl shrink-0 ml-1.5 shadow-sm font-extrabold">
+              ★
+            </span>
+          </div>
+          <div className="mt-4 pt-1.5 border-t border-amber-200/50 text-[10px] font-extrabold text-amber-800/80 truncate">
+            ผู้ตอบแบบประเมิน: {totalEvaluationsCount} คน
+          </div>
+        </div>
       </div>
 
-      {/* Charts Section: ประเภทเอกสาร และ สถิติตามหน่วยงาน */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Section: ประเภทเอกสาร, สถิติตามหน่วยงาน, และ ความพึงพอใจการบริการ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart 1: สัดส่วนเอกสารเข้า-ออกตาม ประเภทเอกสาร (e-mail vs เอกสารกระดาษ) */}
         <div id="chart-doc-type" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div className="mb-4">
@@ -836,6 +931,54 @@ export default function Dashboard({
           <div className="border-t border-slate-100 pt-3.5 mt-2 flex items-center justify-between text-[10px] text-slate-400 font-semibold font-sans">
             <span>สำรวจปริมาณงานเพื่อประกอบการบริหารบุคลากรสายวิจัยและพัฒนานวัตกรรมการศึกษาตามสัดส่วนงานจริง</span>
             <span className="bg-[#003366]/5 text-[#003366] px-1.5 py-0.5 rounded">ระบบวิเคราะห์</span>
+          </div>
+        </div>
+
+        {/* Chart 3: สัดส่วนผู้ที่กดเลือกดาวแต่ละระดับ */}
+        <div id="chart-satisfaction" className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div className="mb-4">
+            <h3 className="text-xs font-bold text-[#003366] uppercase tracking-wider">ระดับความพึงพอใจการบริการ (Satisfaction Ratings)</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">สัดส่วนจำนวนดาวแต่ละระดับจากการประเมินของอาจารย์หลังได้รับผลพิจารณา</p>
+          </div>
+
+          {totalEvaluationsCount > 0 ? (
+            <div className="space-y-3.5 my-1">
+              {[5, 4, 3, 2, 1].map((stars) => {
+                const count = evaluationDistribution[stars as 1|2|3|4|5] || 0;
+                const percentage = totalEvaluationsCount > 0 ? Math.round((count / totalEvaluationsCount) * 100) : 0;
+                const starColors = ["bg-emerald-500", "bg-teal-500", "bg-amber-400", "bg-orange-400", "bg-rose-500"];
+                const barColor = starColors[5 - stars];
+
+                return (
+                  <div key={stars} className="space-y-1">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-slate-700">
+                      <span className="flex items-center gap-1">
+                        <span>{stars} ดาว</span>
+                        <span className="text-amber-500">★</span>
+                      </span>
+                      <span className="font-mono text-slate-500 shrink-0 select-none ml-2">
+                        {count} คน ({percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-5.5 rounded-md overflow-hidden flex">
+                      <div 
+                        className={`${barColor} h-full transition-all duration-1000 ease-out font-mono text-[9px] text-white flex items-center justify-end pr-2 font-bold`}
+                        style={{ width: `${percentage}%` }}
+                      >
+                        {percentage > 0 && `${percentage}%`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-xs text-slate-400 font-medium">ยังไม่มีข้อมูลคะแนนประเมินความพึงพอใจ</div>
+          )}
+
+          <div className="border-t border-slate-100 pt-3.5 mt-2 flex items-center justify-between text-[10px] text-slate-400 font-semibold font-sans">
+            <span>คำนวณสถิติจากคู่ผลประเมินในระบบคลาวด์คีย์จริงและระบบสำรองหน้าบ้านแบบเรียลไทม์</span>
+            <span className="bg-[#003366]/5 text-[#003366] px-1.5 py-0.5 rounded">เรียลไทม์</span>
           </div>
         </div>
       </div>
@@ -971,19 +1114,9 @@ export default function Dashboard({
 
       {/* 📊 A4 Executive Infographic Report Container rendered off-screen */}
       {(() => {
-        const ratedDocsList = filteredDocs.filter((d) => typeof d.serviceRating === "number" && d.serviceRating > 0);
-        const totalRatingsCount = ratedDocsList.length;
-        const averageRatingScore = totalRatingsCount > 0
-          ? (ratedDocsList.reduce((acc, curr) => acc + (curr.serviceRating || 0), 0) / totalRatingsCount).toFixed(2)
-          : "0.00";
-
-        const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-        ratedDocsList.forEach((d) => {
-          const r = d.serviceRating as 1 | 2 | 3 | 4 | 5;
-          if (ratingDistribution[r] !== undefined) {
-            ratingDistribution[r]++;
-          }
-        });
+        const totalRatingsCount = totalEvaluationsCount;
+        const averageRatingScore = averageEvaluationScore;
+        const ratingDistribution = evaluationDistribution;
 
         return (
           <>

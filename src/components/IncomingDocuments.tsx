@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from "react";
-import emailjs from "@emailjs/browser";
+import emailjs from "emailjs-com";
 import { saveDocumentLog } from "../services/supabaseClient";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory, VpRouting } from "../types";
@@ -115,6 +115,8 @@ export default function IncomingDocuments({
   const [isCopied, setIsCopied] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [previewTab, setPreviewTab] = useState<"text" | "html">("html");
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   // Duplicate document warning indicators
   const [duplicateWarning, setDuplicateWarning] = useState(false);
@@ -406,18 +408,18 @@ export default function IncomingDocuments({
       const docReceiver = formReceiver.trim() || "-";
       const docOutgoingDept = formOutgoingDepartment.trim() || "-";
 
-      // Compile exact revised formal Thai template (using the new single pre-filled Google Form rating system)
-      const baseFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111=";
+      // Compile exact revised formal Thai template (using the intelligent direct-rating redirect URL to our own system)
+      const docRefId = payload.id || "";
       const ratingLinks = `
 --------------------------------------------------
 📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
 โปรดคลิกลิงก์เลือกระดับดาวเพื่อบันทึกคะแนนประเมินความพึงพอใจของท่านลงในระบบโดยตรง:
 
-🤬 ปรับปรุง (1 ดาว): ${baseFormUrl}1
-🙁 พอใช้ (2 ดาว): ${baseFormUrl}2
-😐 ปานกลาง (3 ดาว): ${baseFormUrl}3
-😊 ดี (4 ดาว): ${baseFormUrl}4
-🤩 ดีเยี่ยม (5 ดาว): ${baseFormUrl}5
+🤬 ปรับปรุง (1 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=1
+😟 พอใช้ (2 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=2
+😐 ปานกลาง (3 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=3
+😊 ดี (4 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=4
+🤩 ดีเยี่ยม (5 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=5
 --------------------------------------------------`;
 
       const emailBody = `เรียน ${docSender} (${docDept})
@@ -499,6 +501,132 @@ Email: kittiwat.p@bu.ac.th
     setIsModalOpen(false);
   };
 
+  // Helper function to generate elegant HTML email with embedded star/smiley ratings pointing back to our App
+  const generateHTMLTemplate = (payload: any, docId: string) => {
+    const docRefId = docId || "";
+    const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docRefId}`;
+
+    return `
+      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f6f8fa; padding: 24px; margin: 0; width: 100%; box-sizing: border-box; -webkit-font-smoothing: antialiased;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); border: 1px solid #e1e4e8;">
+          
+          <!-- Header Banner: Dark Purple -->
+          <div style="background: linear-gradient(135deg, #6b21a8 0%, #3730a3 100%); background-color: #581c87; padding: 36px 24px; text-align: center; color: #ffffff;">
+            <div style="font-size: 36px; margin-bottom: 12px; line-height: 1;">✨</div>
+            <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.5px;">พิจารณาเอกสารเสร็จสิ้น</h2>
+            <p style="font-size: 13px; color: #e9d5ff; margin: 0; font-weight: 300;">เอกสารของท่านได้รับการพิจารณาและส่งต้นต่อเสร็จสมบูรณ์แล้ว</p>
+          </div>
+
+          <!-- Main Body -->
+          <div style="padding: 32px 24px; color: #24292e;">
+            <p style="font-size: 14px; font-weight: 700; margin: 0 0 12px 0;">เรียน ${payload.senderName || "-"} (${payload.department || "-"})</p>
+            <p style="font-size: 13px; color: #586069; line-height: 1.6; margin: 0 0 24px 0;">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) ขอแจ้งผลการพิจารณาเอกสาร โดยมีรายละเอียดดังต่อไปนี้:</p>
+
+            <!-- Content Card: Rounded Table -->
+            <div style="border: 1px solid #e1e4e8; border-left: 4px solid #6b21a8; border-radius: 12px; overflow: hidden; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                <tbody>
+                  <tr style="border-bottom: 1px solid #f1f2f4;">
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; width: 33%; border-right: 1px solid #f1f2f4;">เลขที่อ้างอิง วพ.</th>
+                    <td style="padding: 12px; font-family: monospace; font-weight: 700; color: #24292e;">${payload.vphRefNo || "-"}</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #f1f2f4;">
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; border-right: 1px solid #f1f2f4;">เลขที่หนังสือต้นทาง</th>
+                    <td style="padding: 12px; color: #24292e;">${payload.docNumber || "-"}</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #f1f2f4;">
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; border-right: 1px solid #f1f2f4;">เรื่อง / ชื่อโครงการ</th>
+                    <td style="padding: 12px; font-weight: 700; color: #24292e; line-height: 1.4;">${payload.subject || "-"}</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #f1f2f4;">
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; border-right: 1px solid #f1f2f4;">ผลการพิจารณา</th>
+                    <td style="padding: 12px;">
+                      <span style="background-color: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; display: inline-block;">${payload.status || "อนุมัติ"}</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #f1f2f4;">
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; border-right: 1px solid #f1f2f4;">วันที่ส่งพิจารณาเสร็จ</th>
+                    <td style="padding: 12px; color: #24292e;">${payload.outgoingDate || "-"}</td>
+                  </tr>
+                  <tr>
+                    <th style="padding: 12px; background-color: #fafbfc; font-weight: 700; color: #581c87; border-right: 1px solid #f1f2f4;">ผู้รับช่วงต่อ</th>
+                    <td style="padding: 12px; color: #24292e;">${payload.receiverName || "-"} <span style="color: #6a737d;">(หน่วยงาน: ${payload.outgoingDept || "-"})</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Sticky Notes Block -->
+            <div style="background-color: #fafbfc; border-left: 3px solid #cbd5e0; padding: 12px; border-radius: 0 8px 8px 0; font-size: 12px; color: #4a5568; font-style: italic; margin-bottom: 24px; line-height: 1.5;">
+              💡 (หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับหน่วยงานรับช่วงต่อเสร็จสิ้น เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)
+            </div>
+
+            <!-- Rating Block: Clickable Smileys matching Image 2 -->
+            <div style="background-color: #fbfbfe; border: 2px dashed #e9d5ff; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
+              <h4 style="font-size: 14px; font-weight: 700; color: #3730a3; margin: 0 0 6px 0;">❤️ ช่วยประเมินบริการของเราหน่อยได้ไหมคะ?</h4>
+              <p style="font-size: 11.5px; color: #6b21a8; margin: 0 0 16px 0; line-height: 1.5;">กรุณาคลิกเลือกดาวพึงพอใจการให้บริการผ่านระบบอัจฉริยะใน 1 คลิก เพื่อพัฒนาศักยภาพบริการให้ดียิ่งขึ้น</p>
+              
+              <table style="margin: 0 auto; border-collapse: separate; border-spacing: 10px;">
+                <tr>
+                  <td>
+                    <a href="${baseRatingUrl}&score=1" style="text-decoration: none; display: block; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; width: 64px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                      <div style="font-size: 20px; margin-bottom: 2px;">🤬</div>
+                      <div style="font-size: 9px; font-weight: 700; color: #6b21a8;">ปรับปรุง</div>
+                      <div style="font-size: 8px; color: #ec4899; margin-top: 2px; font-weight: bold;">⭐</div>
+                    </a>
+                  </td>
+                  <td>
+                    <a href="${baseRatingUrl}&score=2" style="text-decoration: none; display: block; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; width: 64px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                      <div style="font-size: 20px; margin-bottom: 2px;">😟</div>
+                      <div style="font-size: 9px; font-weight: 700; color: #6b21a8;">พอใช้</div>
+                      <div style="font-size: 8px; color: #ec4899; margin-top: 2px; font-weight: bold;">⭐⭐</div>
+                    </a>
+                  </td>
+                  <td>
+                    <a href="${baseRatingUrl}&score=3" style="text-decoration: none; display: block; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; width: 64px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                      <div style="font-size: 20px; margin-bottom: 2px;">😐</div>
+                      <div style="font-size: 9px; font-weight: 700; color: #6b21a8;">ปานกลาง</div>
+                      <div style="font-size: 8px; color: #ec4899; margin-top: 2px; font-weight: bold;">⭐⭐⭐</div>
+                    </a>
+                  </td>
+                  <td>
+                    <a href="${baseRatingUrl}&score=4" style="text-decoration: none; display: block; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; width: 64px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                      <div style="font-size: 20px; margin-bottom: 2px;">😊</div>
+                      <div style="font-size: 9px; font-weight: 700; color: #6b21a8;">ดี</div>
+                      <div style="font-size: 8px; color: #ec4899; margin-top: 2px; font-weight: bold;">⭐⭐⭐⭐</div>
+                    </a>
+                  </td>
+                  <td>
+                    <a href="${baseRatingUrl}&score=5" style="text-decoration: none; display: block; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; width: 64px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                      <div style="font-size: 20px; margin-bottom: 2px;">🤩</div>
+                      <div style="font-size: 9px; font-weight: 700; color: #6b21a8;">ดีเยี่ยม</div>
+                      <div style="font-size: 8px; color: #ec4899; margin-top: 2px; font-weight: bold;">⭐⭐⭐⭐⭐</div>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="margin-top: 14px;">
+                <a href="${baseRatingUrl}&score=5" style="text-decoration: none; display: inline-block; background-color: #6b21a8; color: #ffffff; font-weight: bold; font-size: 11px; padding: 10px 20px; border-radius: 99px;">
+                  ✍️ ประเมินบริการด่วนใน 1 วินาที
+                </a>
+              </div>
+            </div>
+
+            <!-- Signature Block -->
+            <div style="border-top: 1px solid #e1e4e8; padding-top: 16px; font-size: 12px; color: #586069; line-height: 1.5;">
+              <p style="margin: 0 0 4px 0;">จึงเรียนมาเพื่อโปรดทราบ</p>
+              <p style="font-weight: 700; color: #6b21a8; margin: 0 0 4px 0;">ขอแสดงความนับถือ</p>
+              <p style="font-weight: 700; color: #24292e; margin: 0 0 2px 0;">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)</p>
+              <p style="margin: 0; color: #6a737d; font-size: 11.5px;">มหาวิทยาลัยกรุงเทพ (โทร. 2122 / อีเมล: kittiwat.p@bu.ac.th)</p>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   const sendDirectEmail = async () => {
     setIsSendingEmail(true);
     try {
@@ -522,7 +650,7 @@ Email: kittiwat.p@bu.ac.th
         vphRefNo: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.id) || '000/2568',
         vphRef: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.id) || '000/2568',
         vphNo: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.vopId) || '-',
-        id: editingDoc?.id || '-',
+        id: editingDoc?.id || matchedDoc?.id || '-',
         docNumber: docNumber.trim() || (editingDoc?.docNumber) || '-',
         documentNumber: docNumber.trim() || (editingDoc?.docNumber) || '-',
         senderName: formSender.trim() || (editingDoc?.sender) || '-',
@@ -564,30 +692,48 @@ Email: kittiwat.p@bu.ac.th
       console.log("Direct background email dispatch payload tracking to Supabase:", payload);
 
       // Save database log directly to Supabase table document_logs (and localStorage backup)
-      await saveDocumentLog({
-        vph_ref_no: payload.vphRefNo,
-        doc_number: payload.docNumber,
-        sender_name: payload.senderName,
-        department: payload.department,
-        subject: payload.subject,
-        status: payload.status,
-        outgoing_date: payload.outgoingDate,
-        receiver_name: payload.receiverName,
-        outgoing_dept: payload.outgoingDept,
-        recipient_email: payload.recipientEmail,
-        rating: rating || 5,
-        email_body: previewEmailBody || ""
-      });
+      try {
+        await saveDocumentLog({
+          vph_ref_no: payload.vphRefNo,
+          doc_number: payload.docNumber,
+          sender_name: payload.senderName,
+          department: payload.department,
+          subject: payload.subject,
+          status: payload.status,
+          outgoing_date: payload.outgoingDate,
+          receiver_name: payload.receiverName,
+          outgoing_dept: payload.outgoingDept,
+          recipient_email: payload.recipientEmail,
+          rating: rating || 5,
+          email_body: previewEmailBody || ""
+        });
+      } catch (logErr) {
+        console.warn("Supabase document log failed to write", logErr);
+      }
 
-      // Send via EmailJS client SDK direct from browser
-      const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_ridocument";
-      const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "template_ridocument";
-      const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "";
+      // Fetch configurations from process.env and fallback to import.meta.env (avoiding hardcoding)
+      let serviceId = "";
+      let templateId = "";
+      let publicKey = "";
+
+      try {
+        if (typeof process !== "undefined" && process?.env) {
+          serviceId = process.env.REACT_APP_EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || "";
+          templateId = process.env.REACT_APP_EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || "";
+          publicKey = process.env.REACT_APP_EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || "";
+        }
+      } catch (err) {
+        console.warn("Error checking process.env", err);
+      }
+
+      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_ridocument";
+      if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_ridocument";
+      if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "";
 
       if (publicKey && publicKey.trim() !== "" && publicKey !== "YOUR_EMAILJS_PUBLIC_KEY") {
         console.log("Dispatching live email with EmailJS:", { serviceId, templateId, publicKey });
         
-        // Prepare template params
+        // Prepare template params including custom generated html_body
         const templateParams = {
           vph_ref_no: payload.vphRefNo,
           doc_number: payload.docNumber,
@@ -601,21 +747,30 @@ Email: kittiwat.p@bu.ac.th
           recipient_email: payload.recipientEmail,
           rating: payload.rating,
           email_body: previewEmailBody || "",
+          html_body: generateHTMLTemplate(payload, currentDoc.id),
           base_form_url: "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111="
         };
 
         await emailjs.send(serviceId, templateId, templateParams, publicKey);
-        alert("ระบบบันทึกข้อมูลธุรกรรมลง Supabase และส่งอีเมลแจ้งผลเรียบร้อยแล้ว!");
+        
+        // Success notification and automatically close modal
+        setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 4500);
       } else {
         console.warn("EmailJS is not fully configured (VITE_EMAILJS_PUBLIC_KEY missing). Falling back to client-side opening standard mailto.");
         const confirmMail = confirm(
-          "บันทึกประวัติธุรกรรมลงฐานข้อมูล Supabase สำเร็จ!\n\nเนื่องจากระบบตรวจไม่พบ API Key ของ EmailJS (VITE_EMAILJS_PUBLIC_KEY)\nระบบยินดีเปิดหน้าส่งเมล (Mail Client) ประจำเครื่องของท่าน เพื่อจัดส่งเมลทันที!"
+          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nเนื่องจากระบบตรวจไม่พบ API Key ของ EmailJS\nระบบยินดีเปิดหน้าส่งเมล (Mail Client) ประจำเครื่องของท่าน เพื่อจัดส่งเมลทันที!"
         );
         if (confirmMail) {
           const mailSubject = `แจ้งผลการพิจารณาเอกสาร ${payload.docNumber} - ${payload.subject}`;
           const mailBody = previewEmailBody || `เรียน ${payload.senderName}...`;
           window.open(`mailto:${payload.recipientEmail}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`, '_blank');
         }
+        
+        setToastMessage("เปิดไคลเอนต์อีเมลเพื่อจัดส่งเรียบร้อย!");
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 4500);
       }
 
       setRating(0);
@@ -1498,6 +1653,26 @@ Email: kittiwat.p@bu.ac.th
         </div>
       )}
 
+      {/* Toast Notification */}
+      {showSuccessToast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center justify-center animate-bounce duration-150">
+          <div className="bg-emerald-600 text-white px-5 py-3.5 rounded-xl shadow-lg border border-emerald-500 flex items-center gap-3 max-w-sm font-sans animate-slideUp">
+            <span className="text-xl">✨</span>
+            <div>
+              <p className="text-xs font-bold">{toastMessage}</p>
+              <p className="text-[10px] text-emerald-100 font-light mt-0.5">ระบบดำเนินการส่งข้อมูลเสร็จสมบูรณ์</p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setShowSuccessToast(false)}
+              className="ml-auto text-emerald-200 hover:text-white text-xs font-bold pl-2 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Custom Email Preview & Service Star Rating Modal Dialog Box */}
       {isEmailPreviewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1707,28 +1882,44 @@ Email: kittiwat.p@bu.ac.th
                       <div className="bg-purple-50/20 border-2 border-dashed border-purple-200 rounded-2xl p-5 text-center space-y-4">
                         <h4 className="text-purple-900 font-bold text-sm font-sans">❤️ ช่วยประเมินบริการของเราหน่อยได้ไหมคะ?</h4>
                         <p className="text-[11px] text-purple-600 max-w-sm mx-auto leading-relaxed font-sans">
-                          กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้ (ระบบประเมิน 5 ดาว pre-filled เข้า Google Form ได้รวดเร็วและแม่นยำสูงสุด)
+                          กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้ (ระบบประเมิน 5 ดาว บันทึกคะแนนรวดเร็วและแม่นยำสูงสุด)
                         </p>
 
                         <div className="flex justify-center flex-wrap gap-2 py-1 select-none">
                           {[
-                            { val: 1, emoji: "🤬", text: "ปรับปรุง", stars: "★" },
-                            { val: 2, emoji: "🙁", text: "พอใช้", stars: "★★" },
-                            { val: 3, emoji: "😐", text: "ปานกลาง", stars: "★★★" },
-                            { val: 4, emoji: "😊", text: "ดี", stars: "★★★★" },
-                            { val: 5, emoji: "🤩", text: "ดีเยี่ยม", stars: "★★★★★" },
-                          ].map((opt) => (
-                            <div key={opt.val} className="w-15 bg-white border border-purple-100 rounded-xl p-2 text-center flex flex-col items-center shadow-xs">
-                              <span className="text-xl mb-1">{opt.emoji}</span>
-                              <span className="text-[9px] font-bold text-purple-700 block whitespace-nowrap mb-0.5">{opt.text}</span>
-                              <span className="text-[9.5px] text-pink-500 font-sans tracking-tight">{opt.stars}</span>
-                            </div>
-                          ))}
+                            { val: 1, emoji: "🤬", text: "ปรับปรุง" },
+                            { val: 2, emoji: "😟", text: "พอใช้" },
+                            { val: 3, emoji: "😐", text: "ปานกลาง" },
+                            { val: 4, emoji: "😊", text: "ดี" },
+                            { val: 5, emoji: "🤩", text: "ดีเยี่ยม" },
+                          ].map((opt) => {
+                            const isSelected = rating >= opt.val;
+                            return (
+                              <button
+                                key={opt.val}
+                                type="button"
+                                onClick={() => setRating(opt.val)}
+                                className={`w-16 bg-white border rounded-xl p-2 text-center flex flex-col items-center shadow-xs transition duration-150 cursor-pointer ${
+                                  isSelected 
+                                    ? "border-amber-400 bg-amber-50 text-amber-900 scale-105" 
+                                    : "border-purple-150 hover:border-purple-300"
+                                }`}
+                              >
+                                <span className="text-xl mb-1">{opt.emoji}</span>
+                                <span className="text-[9px] font-bold text-purple-700 block whitespace-nowrap mb-0.5">{opt.text}</span>
+                                <span className="text-[9.5px] text-pink-500 font-sans tracking-tight">{"★".repeat(opt.val)}</span>
+                              </button>
+                            );
+                          })}
                         </div>
 
                         <div className="pt-1.5">
-                          <button type="button" className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-6 py-2 rounded-full shadow-md active:scale-98 transition duration-150">
-                            ✍️ ประเมินความพึงพอใจการให้บริการ
+                          <button 
+                            type="button" 
+                            onClick={() => setRating(5)}
+                            className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-6 py-2 rounded-full shadow-md active:scale-98 transition duration-150 cursor-pointer"
+                          >
+                            ✍️ ประเมินความพึงพอใจการให้บริการ (ดีเยี่ยม 🤩)
                           </button>
                           <p className="text-[10px] text-purple-400 mt-1.5 font-sans">ใช้เวลาประเมินเพียง 1 นาทีเพื่อการปรับปรุงบริการ</p>
                         </div>
@@ -1760,7 +1951,7 @@ Email: kittiwat.p@bu.ac.th
                 <div className="flex items-center justify-center gap-2 sm:gap-4 py-2">
                   {[
                     { val: 1, label: "ปรับปรุง (1)", emoji: "🤬", text: "ปรับปรุง" },
-                    { val: 2, label: "พอใช้ (2)", emoji: "🙁", text: "พอใช้" },
+                    { val: 2, label: "พอใช้ (2)", emoji: "😟", text: "พอใช้" },
                     { val: 3, label: "ปานกลาง (3)", emoji: "😐", text: "ปานกลาง" },
                     { val: 4, label: "ดี (4)", emoji: "😊", text: "ดี" },
                     { val: 5, label: "ดีเยี่ยม (5)", emoji: "🤩", text: "ดีเยี่ยม" }

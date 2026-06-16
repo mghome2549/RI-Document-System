@@ -31,6 +31,12 @@ service cloud.firestore {
       allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceRating', 'updatedAt']));
     }
 
+    // Document logs collection rules
+    match /document_logs/{documentId} {
+      allow get: if true;
+      allow create, update: if true; // Allow public to submit rating
+    }
+
     match /outgoing_documents/{documentId} {
       allow read, write: if isAdmin();
     }

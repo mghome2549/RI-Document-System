@@ -12,7 +12,8 @@ import {
   query,
   where,
   getDocFromServer,
-  runTransaction
+  runTransaction,
+  Timestamp
 } from "firebase/firestore";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory } from "../types";
 import { formatThaiDate } from "../utils/academicYear";
@@ -326,24 +327,66 @@ export async function submitDocumentRatingPublic(id: string, ratingValue: number
   const updatedAt = new Date().toISOString();
   if (isFirebaseConfigured && db) {
     try {
-      const docRef = doc(db, "documents", id);
-      await updateDoc(docRef, {
-        serviceRating: ratingValue,
-        updatedAt: updatedAt
-      });
+      // 1. Update the document_logs collection in Firestore as requested
+      const logRef = doc(db, "document_logs", id);
+      await setDoc(logRef, {
+        rating_score: ratingValue,
+        evaluated_at: Timestamp.now(),
+        status: "ประเมินผลแล้ว"
+      }, { merge: true });
+
+      // 2. Also update standard documents collection for admin visibility
+      try {
+        const docRef = doc(db, "documents", id);
+        await updateDoc(docRef, {
+          serviceRating: ratingValue,
+          status: "ประเมินผลแล้ว",
+          updatedAt: updatedAt
+        });
+      } catch (errDocs) {
+        console.warn("Updating state in primary documents collection skipped or failed:", errDocs);
+      }
       return;
     } catch (err) {
       console.error("submitDocumentRatingPublic failed:", err);
+      handleFirestoreError(err, OperationType.WRITE, `document_logs/${id}`);
     }
   }
 
+  // Backup LocalStorage / mock fallback
+  const storedLogsKey = "bu_document_logs";
+  const storedLogs = localStorage.getItem(storedLogsKey);
+  const logsList = storedLogs ? JSON.parse(storedLogs) : [];
+  
+  const index = logsList.findIndex((l: any) => l.id === id || l.vph_ref_no === id);
+  if (index >= 0) {
+    logsList[index] = {
+      ...logsList[index],
+      rating_score: ratingValue,
+      evaluated_at: new Date().toISOString(),
+      status: "ประเมินผลแล้ว",
+      rating: ratingValue
+    };
+  } else {
+    logsList.push({
+      id: id,
+      vph_ref_no: id,
+      rating_score: ratingValue,
+      evaluated_at: new Date().toISOString(),
+      status: "ประเมินผลแล้ว",
+      rating: ratingValue
+    });
+  }
+  localStorage.setItem(storedLogsKey, JSON.stringify(logsList));
+
   const stored = localStorage.getItem(MOCK_STORAGE_KEY_DOCS);
   const docsList: Document[] = stored ? JSON.parse(stored) : [];
-  const index = docsList.findIndex(d => d.id === id);
-  if (index >= 0) {
-    docsList[index] = {
-      ...docsList[index],
+  const idx = docsList.findIndex(d => d.id === id);
+  if (idx >= 0) {
+    docsList[idx] = {
+      ...docsList[idx],
       serviceRating: ratingValue,
+      status: "ประเมินผลแล้ว",
       updatedAt: updatedAt
     };
     localStorage.setItem(MOCK_STORAGE_KEY_DOCS, JSON.stringify(docsList));
