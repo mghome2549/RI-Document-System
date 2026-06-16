@@ -318,122 +318,156 @@ function sendAssessmentEmail(payload) {
   // แปลงเนื้อความสลักลายเซ็นต์และรายละเอียดแบบ Plain Text
   var plainText = payload.emailBody || "";
   
-  // ออกแบบหน้าเค้าร่าง HTML ที่ตอบรับอุปกรณ์และกล่องดาวประเมิน Pre-filled เพียงลิงก์เดียวที่เสถียรที่สุด
+  // ออกแบบหน้าเค้าร่าง HTML ธีมสีม่วงสะดุดตาระดับพรีเมียม สไตล์รูปภาพตัวอย่างที่ 1 บูรณาการหัวข้อและระบบให้คะแนนอย่างเสถียรที่สุด
   var htmlBody = 
-    '<div style="font-family: \'Sarabun\', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; line-height: 1.6; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">' +
-      '<!-- Header Banner -->' +
-      '<div style="background-color: #003366; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">' +
-        '<h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold; font-family: \'Sarabun\', sans-serif;">' +
-          'แจ้งผลการพิจารณาเอกสาร / Notification of Document Consideration' +
+    '<div style="font-family: \'Sarabun\', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; line-height: 1.6; background-color: #fbf9fe; border-radius: 16px; border: 1px solid #e9d5ff;">' +
+      '<!-- Header Banner (Purple Elegant Styling) -->' +
+      '<div style="background-color: #6b21a8; padding: 32px 24px; border-radius: 12px 12px 0 0; text-align: center; background-image: linear-gradient(135deg, #6b21a8 0%, #5b21b6 100%);">' +
+        '<span style="font-size: 40px; display: block; margin-bottom: 12px; line-height: 1;">✨</span>' +
+        '<h2 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: bold; font-family: \'Sarabun\', sans-serif; letter-spacing: -0.5px;">' +
+          'พิจารณาเอกสารเสร็จสิ้น' +
         '</h2>' +
-        '<p style="color: #cbd5e1; margin: 4px 0 0 0; font-size: 11.5px; font-weight:lighter;">' +
-          'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) มหาวิทยาลัยกรุงเทพ' +
+        '<p style="color: #e9d5ff; margin: 6px 0 0 0; font-size: 13px; font-weight: normal; font-family: \'Sarabun\', sans-serif;">' +
+          'เอกสารของท่านได้รับการพิจารณาและส่งต้นต่อเสร็จสมบูรณ์แล้ว' +
         '</p>' +
       '</div>' +
       
       '<!-- Content Container -->' +
-      '<div style="background-color: #ffffff; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">' +
-        '<p style="font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 0;">' +
+      '<div style="background-color: #ffffff; padding: 28px 24px; border-radius: 0 0 12px 12px; border: 1px solid #eae6f0; border-top: none; box-shadow: 0 4px 12px rgba(107,33,168,0.03);">' +
+        '<p style="font-size: 15px; font-weight: bold; color: #1e1b4b; margin-top: 0; margin-bottom: 12px;">' +
           'เรียน ' + (payload.senderName || '-') + ' (' + (payload.department || '-') + ')' +
         '</p>' +
         
-        '<p style="font-size: 13.5px; color: #334155; margin-bottom: 20px; text-indent: 15px;">' +
+        '<p style="font-size: 13.5px; color: #4b5563; margin-bottom: 20px; line-height: 1.6;">' +
           'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) ขอแจ้งผลการพิจารณาเอกสาร โดยมีรายละเอียดดังต่อไปนี้:' +
         '</p>' +
 
-        '<!-- Table Details -->' +
-        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">' +
-          '<tr style="background-color: #f8fafc;">' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; width: 40%; border-bottom: 1px solid #f1f5f9;">เลขที่อ้างอิง วพ.:</td>' +
-            '<td style="padding: 10px 14px; color: #003366; border-bottom: 1px solid #f1f5f9; font-weight: bold; font-family: monospace;">' + (payload.vphRefNo || '-') + '</td>' +
-          '</tr>' +
-          '<tr>' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">เลขที่หนังสือต้นทาง:</td>' +
-            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.docNumber || '-') + '</td>' +
-          '</tr>' +
-          '<tr style="background-color: #f8fafc;">' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">เรื่อง / ชื่อโครงการ:</td>' +
-            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' + (payload.subject || '-') + '</td>' +
-          '</tr>' +
-          '<tr>' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">ผลการพิจารณาจาก รอง วพ.:</td>' +
-            '<td style="padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-weight: bold;">' +
-              '<span style="background-color: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; padding: 2px 8px; border-radius: 9999px; font-size: 11.5px;">' + (payload.status || 'อนุมัติ') + '</span>' +
-            '</td>' +
-          '</tr>' +
-          '<tr style="background-color: #f8fafc;">' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">วันที่ดำเนินการส่งออก:</td>' +
-            '<td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.outgoingDate || '-') + '</td>' +
-          '</tr>' +
-          '<tr>' +
-            '<td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #f1f5f9;">หน่วยงานปลายทางที่รับช่วงต่อ:</td>' +
-            <td style="padding: 10px 14px; color: #1e293b; border-bottom: 1px solid #f1f5f9;">' + (payload.receiverName || '-') + ' (หน่วยงาน: ' + (payload.outgoingDept || '-') + ')</td>' +
-          '</tr>' +
-        '</table>' +
-
-        '<p style="font-size: 12px; color: #64748b; line-height: 1.5; font-style: italic; margin-bottom: 25px; padding: 10px 14px; background-color: #fafafa; border-left: 3px solid #cbd5e1;">' +
-          '(หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับหน่วยงานรับช่วงต่อเสร็จสิ้น เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)' +
-        '</p>' +
-
-        '<!-- 📊 Section: Google Form Pre-filled Star Rating -->' +
-        '<div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">' +
-          '<h3 style="color: #78350f; margin: 0 0 6px 0; font-size: 14px; font-weight: bold;">' +
-            '📊 แบบประเมินระดับความพึงพอใจการให้บริการ (วพ. Service Rating)' +
-          '</h3>' +
-          '<p style="color: #92400e; margin: 0 0 16px 0; font-size: 11.5px;">' +
-            'กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้<br/>(ระบบจะลิ้งก์ไปยัง Google Form ของสถาบัน โดยทำการระบุแต้มคะแนนล่วงหน้าอย่างรวดเร็วและเสถียรที่สุด)' +
-          '</p>' +
-
-          '<table style="width: 100%; max-width: 440px; margin: 0 auto; border-collapse: separate; border-spacing: 6px;">' +
+        '<!-- Table Details with High-Fidelity Purple Accent Left Border -->' +
+        '<div style="border-left: 4px solid #6b21a8; border-top: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; border-bottom: 1px solid #f3e8ff; border-radius: 4px; overflow: hidden; margin-bottom: 24px;">' +
+          '<table style="width: 100%; border-collapse: collapse; font-size: 13px; font-family: \'Sarabun\', sans-serif;">' +
             '<tr>' +
-              '<!-- 🤬 1 ดาว -->' +
-              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
-                '<a href="\' + baseFormUrl + \'1" target="_blank" style="text-decoration: none; display: block;">' +
-                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🤬</span>' +
-                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ปรับปรุง</span>' +
-                  '<span style="font-size: 12px; color: #be185d; display: block;">★</span>' +
-                '</a>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>เลขที่อ้างอิง วพ.:' +
               '</td>' +
-              '<!-- 🙁 2 ดาว -->' +
-              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
-                '<a href="\' + baseFormUrl + \'2" target="_blank" style="text-decoration: none; display: block;">' +
-                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🙁</span>' +
-                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">พอใช้</span>' +
-                  '<span style="font-size: 12px; color: #d97706; display: block;">★★</span>' +
-                '</a>' +
+              '<td style="padding: 12px 15px; color: #1e1b4b; border-bottom: 1px solid #f3e8ff; font-weight: bold; font-family: monospace; vertical-align: top;">' + 
+                (payload.vphRefNo || '-') + 
               '</td>' +
-              '<!-- 😐 3 ดาว -->' +
-              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
-                '<a href="\' + baseFormUrl + \'3" target="_blank" style="text-decoration: none; display: block;">' +
-                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">😐</span>' +
-                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ปานกลาง</span>' +
-                  '<span style="font-size: 12px; color: #eab308; display: block;">★★★</span>' +
-                '</a>' +
+            '</tr>' +
+            '<tr>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>เลขที่หนังสือต้นทาง:' +
               '</td>' +
-              '<!-- 😊 4 ดาว -->' +
-              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
-                '<a href="\' + baseFormUrl + \'4" target="_blank" style="text-decoration: none; display: block;">' +
-                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">😊</span>' +
-                  '<span style="font-size: 10px; font-weight: bold; color: #b45309; display: block; margin-bottom: 4px;">ดี</span>' +
-                  '<span style="font-size: 12px; color: #84cc16; display: block;">★★★★</span>' +
-                '</a>' +
+              '<td style="padding: 12px 15px; color: #4b5563; border-bottom: 1px solid #f3e8ff; vertical-align: top;">' + 
+                (payload.docNumber || '-') + 
+              </td>' +
+            '</tr>' +
+            '<tr>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>เรื่อง / ชื่อโครงการ:' +
               '</td>' +
-              '<!-- 🤩 5 ดาว -->' +
-              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 4px; text-align: center; vertical-align: middle;">' +
-                '<a href="\' + baseFormUrl + \'5" target="_blank" style="text-decoration: none; display: block;">' +
-                  '<span style="font-size: 22px; display: block; margin-bottom: 4px;">🤩</span>' +
-                  '<span style="font-size: 10px; font-weight: bold; color: #6b21a8; display: block; margin-bottom: 4px;">ดีเยี่ยม</span>' +
-                  '<span style="font-size: 12px; color: #a855f7; display: block;">★★★★★</span>' +
-                '</a>' +
+              '<td style="padding: 12px 15px; color: #1e1b4b; border-bottom: 1px solid #f3e8ff; font-weight: bold; line-height: 1.5; vertical-align: top;">' + 
+                (payload.subject || '-') + 
+              '</td>' +
+            '</tr>' +
+            '<tr>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>ผลการพิจารณา:' +
+              '</td>' +
+              '<td style="padding: 12px 15px; border-bottom: 1px solid #f3e8ff; vertical-align: top; font-weight: bold;">' +
+                '<span style="background-color: #faf5ff; color: #6b21a8; border: 1px solid #e9d5ff; padding: 4px 10px; border-radius: 9999px; font-size: 11.5px; display: inline-block;">' + 
+                  (payload.status || 'อนุมัติ/พิจารณาแล้ว') + 
+                '</span>' +
+              '</td>' +
+            '</tr>' +
+            '<tr>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>วันที่รับส่งเอกสาร:' +
+              '</td>' +
+              '<td style="padding: 12px 15px; color: #4b5563; border-bottom: 1px solid #f3e8ff; vertical-align: top;">' + 
+                (payload.outgoingDate || '-') + 
+              '</td>' +
+            '</tr>' +
+            '<tr>' +
+              '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
+                '<span style="color: #7c3aed; margin-right: 6px;">•</span>ผู้รับช่วงต่อ:' +
+              '</td>' +
+              '<td style="padding: 12px 15px; color: #4b5563; vertical-align: top;">' + 
+                (payload.receiverName || '-') + ' (หน่วยงาน: ' + (payload.outgoingDept || '-') + ')' + 
               '</td>' +
             '</tr>' +
           '</table>' +
         '</div>' +
 
-        '<div style="font-size: 13px; color: #475569; border-top: 1px solid #f1f5f9; padding-top: 15px;">' +
+        '<p style="font-size: 12.5px; color: #6b21a8; line-height: 1.6; font-style: italic; margin-bottom: 25px; padding: 12px 16px; background-color: #faf5ff; border-left: 3px solid #d8b4fe; border-radius: 0 8px 8px 0; margin-top: 0;">' +
+          '(หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับหน่วยงานรับช่วงต่อเสร็จสิ้น เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)' +
+        '</p>' +
+
+        '<!-- 📊 Section: Google Form Pre-filled Star Rating (Interactive Style) -->' +
+        '<div style="background-color: #faf5ff; border: 2px dashed #d8b4fe; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">' +
+          '<h3 style="color: #5b21b6; margin: 0 0 6px 0; font-size: 15px; font-weight: bold; font-family: \'Sarabun\', sans-serif;">' +
+            '❤️ ช่วยประเมินบริการของเราหน่อยได้ไหมคะ?' +
+          '</h3>' +
+          '<p style="color: #6b21a8; margin: 0 0 18px 0; font-size: 12px; line-height: 1.5; font-family: \'Sarabun\', sans-serif;">' +
+            'กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจในการให้บริการในครั้งนี้<br/>(ระบบจะรวมคะแนนส่งเข้า Google Form เพื่อสถิติที่เสถียรและแม่นยำที่สุด)' +
+          '</p>' +
+
+          '<table style="width: 100%; max-width: 460px; margin: 0 auto; border-collapse: separate; border-spacing: 8px;">' +
+            '<tr>' +
+              '<!-- 🤬 1 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
+                '<a href="\' + baseFormUrl + \'1" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🤬</span>' +
+                  '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ปรับปรุง</span>' +
+                  '<span style="font-size: 11px; color: #d946ef; display: block;">★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 🙁 2 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
+                '<a href="\' + baseFormUrl + \'2" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🙁</span>' +
+                  '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">พอใช้</span>' +
+                  '<span style="font-size: 11px; color: #d946ef; display: block;">★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 😐 3 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
+                '<a href="\' + baseFormUrl + \'3" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 24px; display: block; margin-bottom: 4px;">😐</span>' +
+                  '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ปานกลาง</span>' +
+                  '<span style="font-size: 11px; color: #d946ef; display: block;">★★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 😊 4 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
+                '<a href="\' + baseFormUrl + \'4" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 24px; display: block; margin-bottom: 4px;">😊</span>' +
+                  '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ดี</span>' +
+                  '<span style="font-size: 11px; color: #d946ef; display: block;">★★★★</span>' +
+                '</a>' +
+              '</td>' +
+              '<!-- 🤩 5 ดาว -->' +
+              '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
+                '<a href="\' + baseFormUrl + \'5" target="_blank" style="text-decoration: none; display: block;">' +
+                  '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🤩</span>' +
+                  '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ดีเยี่ยม</span>' +
+                  '<span style="font-size: 11px; color: #d946ef; display: block;">★★★★★</span>' +
+                '</a>' +
+              '</td>' +
+            '</tr>' +
+          '</table>' +
+          
+          '<div style="margin-top: 20px;">' +
+            '<a href="\' + baseFormUrl + \'5" target="_blank" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 9999px; text-decoration: none; font-size: 13.5px; font-weight: bold; box-shadow: 0 4px 10px rgba(124, 58, 237, 0.25);">' +
+              '✍️ ประเมินความพึงพอใจการให้บริการ' +
+            '</a>' +
+            '<p style="color: #7c3aed; margin: 8px 0 0 0; font-size: 11px;">ใช้เวลาเพียง 1 นาที เพื่อช่วยเราพัฒนาการบริการ</p>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="font-size: 13px; color: #64748b; border-top: 1px solid #eae6f0; padding-top: 18px; line-height: 1.6;">' +
           '<p style="margin: 0 0 10px 0;">จึงเรียนมาเพื่อโปรดทราบ</p>' +
-          '<p style="margin: 0; font-weight: bold; color: #003366;">ขอแสดงความนับถือ</p>' +
-          '<p style="margin: 4px 0 0 0; font-weight: bold; color: #1e293b;">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)</p>' +
+          '<p style="margin: 0; font-weight: bold; color: #6b21a8;">ขอแสดงความนับถือ</p>' +
+          '<p style="margin: 4px 0 0 0; font-weight: bold; color: #1e1b4b;">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)</p>' +
           '<p style="margin: 2px 0 0 0; font-size: 11.5px; color: #64748b;">มหาวิทยาลัยกรุงเทพ (โทร. 2122 / อีเมล์: kittiwat.p@bu.ac.th)</p>' +
         '</div>' +
       '</div>' +

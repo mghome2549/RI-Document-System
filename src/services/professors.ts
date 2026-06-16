@@ -1,10 +1,11 @@
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection } from "firebase/firestore";
+import { supabase, isSupabaseConfigured } from "./supabaseClient";
+import { doc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "./db";
 
 export interface Professor {
-  id: string; // Row identifier (e.g. index or random ID)
+  id: string; // Col id
   name: string; // ชื่อ-นามสกุล
-  personalId?: string; // รหัสบุคลากร
+  personalId?: string; // รหัสบุคลากร (mapped to employee_id in Supabase)
   position?: string; // ตำแหน่ง
   department: string; // หน่วยงาน
   email: string; // อีเมล์
@@ -12,9 +13,7 @@ export interface Professor {
 }
 
 const LOCAL_STORAGE_KEY_PROFS = "bu_professors_list";
-const LOCAL_STORAGE_KEY_GAS_URL = "bu_gas_webapp_url_professors";
 
-// Default pre-populated list of professors, matching historical mock actions
 const DEFAULT_PROFESSORS: Professor[] = [
   {
     id: "prof-1",
@@ -63,92 +62,46 @@ const DEFAULT_PROFESSORS: Professor[] = [
   }
 ];
 
-// Fallback Apps Script Web App URL if user hasn't set their own yet
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxP1Ud9Imk3zI4fkxsi2Srxtn7NY2Dj1s77JP6m3EK_pdUv72az4R-w6FkciIizbk07/exec";
-
 /**
- * Get configured Google Apps Script URL from LocalStorage or Firestore
- */
-export async function getGoogleAppsScriptUrl(): Promise<string> {
-  const envUrl = import.meta.env.VITE_APP_SCRIPT_URL;
-  if (envUrl && envUrl.trim() !== "") {
-    return envUrl.trim();
-  }
-
-  if (isFirebaseConfigured && db) {
-    try {
-      const configRef = doc(db, "system_settings", "google_sheets_config");
-      const configSnap = await getDoc(configRef);
-      if (configSnap.exists() && configSnap.data().gasUrl) {
-        return configSnap.data().gasUrl;
-      }
-    } catch (err) {
-      console.error("Error loading GAS URL from Firestore:", err);
-    }
-  }
-  
-  const localUrl = localStorage.getItem(LOCAL_STORAGE_KEY_GAS_URL);
-  return localUrl || DEFAULT_GAS_URL;
-}
-
-/**
- * Save Google Apps Script webapp URL to Firestore and LocalStorage
- */
-export async function saveGoogleAppsScriptUrl(url: string): Promise<void> {
-  const cleanUrl = url.trim();
-  localStorage.setItem(LOCAL_STORAGE_KEY_GAS_URL, cleanUrl);
-  
-  if (isFirebaseConfigured && db) {
-    try {
-      const configRef = doc(db, "system_settings", "google_sheets_config");
-      await setDoc(configRef, { gasUrl: cleanUrl, updatedAt: new Date().toISOString() }, { merge: true });
-    } catch (err) {
-      console.error("Error saving GAS URL to Firestore:", err);
-    }
-  }
-}
-
-/**
- * Fetch all professors from Google Sheet (via Apps Script) with fallback to Firestore/LocalStorage
+ * Fetch all professors from Supabase (or Firestore/LocalStorage fallback)
  */
 export async function fetchProfessors(): Promise<Professor[]> {
-  const gasUrl = await getGoogleAppsScriptUrl();
-  
-  if (gasUrl && gasUrl !== "") {
+  // 1. Try Supabase
+  if (isSupabaseConfigured && supabase) {
     try {
-      // Fetch from Google Apps Script with specific query params
-      const fetchUrl = `${gasUrl}?action=GET_PROFS`;
-      console.log("Fetching professor list from Google Apps Script:", fetchUrl);
-      
-      const response = await fetch(fetchUrl);
-      if (response.ok) {
-        const result = await response.json();
-        if (result && result.status === "success" && Array.isArray(result.data)) {
-          // Sync with LocalStorage and return
-          const profList: Professor[] = result.data.map((item: any, idx: number) => ({
-            id: item.id || `prof-${idx + 1}`,
-            name: item.name || item["ชื่อ-นามสกุล"] || "",
-            personalId: item.personalId || item["รหัสบุคลากร"] || "",
-            position: item.position || item["ตำแหน่ง"] || "",
-            department: item.department || item["หน่วยงาน"] || "",
-            email: item.email || item["อีเมล"] || item["อีเมล์"] || "",
-            phone: item.phone || item["โทรศัพท์"] || ""
-          }));
-          
-          if (profList.length > 0) {
-            localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(profList));
-            return profList;
-          }
-        }
+      console.log("Fetching professors from Supabase...");
+      const { data, error } = await supabase
+        .from("professors")
+        .select("*")
+        .order("name", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && Array.isArray(data)) {
+        const mappedList: Professor[] = data.map((raw: any) => ({
+          id: raw.id,
+          name: raw.name || "",
+          personalId: raw.employee_id || raw.personalId || "",
+          position: raw.position || "",
+          department: raw.department || "",
+          email: raw.email || "",
+          phone: raw.phone || ""
+        }));
+
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(mappedList));
+        return mappedList;
       }
     } catch (err) {
-      console.warn("GAS connection failed. Falling back to internal persistence. Error:", err);
+      console.warn("Supabase fetch failed, trying Firestore or LocalStorage. Error:", err);
     }
   }
 
-  // Fallback 1: Firestore
+  // 2. Try Firestore fallback
   if (isFirebaseConfigured && db) {
     try {
+      console.log("Fetching professors from Firestore...");
       const profsCol = collection(db, "professors");
       const querySnap = await getDocs(profsCol);
       if (!querySnap.empty) {
@@ -158,7 +111,7 @@ export async function fetchProfessors(): Promise<Professor[]> {
           profList.push({
             id: docSnap.id,
             name: data.name || "",
-            personalId: data.personalId || "",
+            personalId: data.personalId || data.employee_id || "",
             position: data.position || "",
             department: data.department || "",
             email: data.email || "",
@@ -169,11 +122,11 @@ export async function fetchProfessors(): Promise<Professor[]> {
         return profList;
       }
     } catch (err) {
-      console.error("Error fetching professors from Firestore:", err);
+      console.error("Firestore fetch professors failed:", err);
     }
   }
 
-  // Fallback 2: LocalStorage
+  // 3. Try LocalStorage
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY_PROFS);
   if (stored) {
     try {
@@ -183,13 +136,13 @@ export async function fetchProfessors(): Promise<Professor[]> {
     }
   }
 
-  // Fallback 3: Defaults
+  // 4. Fallback default
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(DEFAULT_PROFESSORS));
   return DEFAULT_PROFESSORS;
 }
 
 /**
- * Add or update a professor in the system (syncing Google Sheets, Firestore, LocalStorage)
+ * Add or update a professor (sync with Supabase and legacy fallbacks - NO Apps Script / NO email dispatch)
  */
 export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: string }): Promise<Professor> {
   const isEditing = !!professor.id;
@@ -204,18 +157,45 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
     phone: professor.phone?.trim() || ""
   };
 
-  // 1. Sync LocalStorage
+  // 1. Sync LocalStorage immediately
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY_PROFS);
   let currentList: Professor[] = stored ? JSON.parse(stored) : [...DEFAULT_PROFESSORS];
-  
   if (isEditing) {
-    currentList = currentList.map((p) => p.id === targetId ? cleanProf : p);
+    currentList = currentList.map((p) => (p.id === targetId ? cleanProf : p));
   } else {
     currentList.push(cleanProf);
   }
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(currentList));
 
-  // 2. Sync Firestore
+  // 2. Sync to Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`Saving professor to Supabase database directly:`, cleanProf);
+      const dbPayload = {
+        id: cleanProf.id,
+        name: cleanProf.name,
+        employee_id: cleanProf.personalId || null,
+        position: cleanProf.position || null,
+        department: cleanProf.department,
+        email: cleanProf.email,
+        phone: cleanProf.phone || null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from("professors")
+        .upsert(dbPayload);
+
+      if (error) {
+        throw error;
+      }
+      console.log("Successfully saved professor to Supabase!");
+    } catch (err) {
+      console.error("Failed to save professor to Supabase:", err);
+    }
+  }
+
+  // 3. Sync legacy Firestore
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(db, "professors", targetId);
@@ -229,30 +209,7 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (err) {
-      console.error("Error saving professor to Firestore:", err);
-    }
-  }
-
-  // 3. Sync Google Sheets (Google Apps Script POST)
-  const gasUrl = await getGoogleAppsScriptUrl();
-  if (gasUrl && gasUrl !== "") {
-    try {
-      console.log(`Sending ${isEditing ? 'EDIT_PROF' : 'ADD_PROF'} payload to GAS:`, gasUrl, cleanProf);
-      const payload = {
-        action: isEditing ? "EDIT_PROF" : "ADD_PROF",
-        professor: cleanProf
-      };
-
-      await fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      console.error("Error saving professor to Google Sheets:", err);
+      console.error("Firestore sync professor failed:", err);
     }
   }
 
@@ -260,10 +217,9 @@ export async function saveProfessor(professor: Omit<Professor, "id"> & { id?: st
 }
 
 /**
- * Bulk import multiple professors from CSV data arrays (using GAS and Firestore) with Upsert strategy
+ * Bulk import multiple professors from CSV (direct database uploads with absolutely NO email alerts/Apps Script)
  */
 export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[]): Promise<{ upsertedCount: number; insertedCount: number }> {
-  // 1. Fetch current list to identify matches
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY_PROFS);
   let currentList: Professor[] = stored ? JSON.parse(stored) : [...DEFAULT_PROFESSORS];
 
@@ -280,7 +236,6 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
     );
 
     if (existingIndex !== -1) {
-      // Upsert: Overwrite matching record
       const match = currentList[existingIndex];
       const updatedProf: Professor = {
         id: match.id,
@@ -295,7 +250,6 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
       updatedDocs.push(updatedProf);
       upsertedCount++;
     } else {
-      // Insert: New record
       const newId = `prof-${Date.now()}-${idx}`;
       const newProf: Professor = {
         id: newId,
@@ -314,7 +268,35 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
 
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(currentList));
 
-  // 2. Sync to Firestore
+  // 1. Supabase bulk upsert
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`Performing bulk import of ${updatedDocs.length} professors to Supabase...`);
+      const payload = updatedDocs.map((p) => ({
+        id: p.id,
+        name: p.name,
+        employee_id: p.personalId || null,
+        position: p.position || null,
+        department: p.department,
+        email: p.email,
+        phone: p.phone || null,
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from("professors")
+        .upsert(payload);
+
+      if (error) {
+        throw error;
+      }
+      console.log("Successfully imported batch to Supabase!");
+    } catch (err) {
+      console.error("Supabase bulk import professors failed:", err);
+    }
+  }
+
+  // 2. Legacy Firestore sync
   if (isFirebaseConfigured && db) {
     try {
       for (const p of updatedDocs) {
@@ -330,30 +312,7 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
         });
       }
     } catch (err) {
-      console.error("Error syncing imported CSV professors to Firestore:", err);
-    }
-  }
-
-  // 3. Sync to Google Sheets (POST call)
-  const gasUrl = await getGoogleAppsScriptUrl();
-  if (gasUrl && gasUrl !== "") {
-    try {
-      console.log(`Sending CSV Batch IMPORT_PROFS to GAS:`, gasUrl, updatedDocs.length);
-      const payload = {
-        action: "IMPORT_PROFS",
-        records: updatedDocs
-      };
-
-      await fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      console.error("Error communicating CSV Import to Google Apps Script:", err);
+      console.error("Firestore sync import failed:", err);
     }
   }
 
@@ -361,7 +320,7 @@ export async function importProfessorsCsv(professorsList: Omit<Professor, "id">[
 }
 
 /**
- * Delete a professor from the system (syncing Google Sheets, Firestore, LocalStorage)
+ * Delete a professor (direct database delete, absolutely silent with NO email trigger / NO Google Apps Script)
  */
 export async function deleteProfessor(id: string): Promise<void> {
   // 1. Sync LocalStorage
@@ -372,36 +331,31 @@ export async function deleteProfessor(id: string): Promise<void> {
     localStorage.setItem(LOCAL_STORAGE_KEY_PROFS, JSON.stringify(currentList));
   }
 
-  // 2. Sync Firestore
+  // 2. Delete from Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      console.log(`Deleting professor ${id} from Supabase...`);
+      const { error } = await supabase
+        .from("professors")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        throw error;
+      }
+      console.log("Successfully deleted professor from Supabase");
+    } catch (err) {
+      console.error("Supabase deleteProfessor failed:", err);
+    }
+  }
+
+  // 3. Delete from Firestore
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(db, "professors", id);
       await deleteDoc(docRef);
     } catch (err) {
-      console.error("Error deleting professor from Firestore:", err);
-    }
-  }
-
-  // 3. Sync Google Sheets (Google Apps Script POST)
-  const gasUrl = await getGoogleAppsScriptUrl();
-  if (gasUrl && gasUrl !== "") {
-    try {
-      console.log(`Sending DELETE_PROF payload to GAS:`, gasUrl, id);
-      const payload = {
-        action: "DELETE_PROF",
-        id: id
-      };
-
-      await fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      console.error("Error communicating deleteProfessor to Google Apps Script:", err);
+      console.error("Firestore delete professor failed:", err);
     }
   }
 }

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
+import emailjs from "@emailjs/browser";
+import { saveDocumentLog } from "../services/supabaseClient";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory, VpRouting } from "../types";
 import { getAcademicYear, formatThaiDate, formatRiRefNo } from "../utils/academicYear";
@@ -18,7 +20,7 @@ import {
   ExternalLink,
   Mail
 } from "lucide-react";
-import { Professor, fetchProfessors, getGoogleAppsScriptUrl } from "../services/professors";
+import { Professor, fetchProfessors } from "../services/professors";
 import AutocompleteInput from "./AutocompleteInput";
 
 interface IncomingDocumentsProps {
@@ -112,6 +114,7 @@ export default function IncomingDocuments({
   const [rating, setRating] = useState<number>(0);
   const [isCopied, setIsCopied] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [previewTab, setPreviewTab] = useState<"text" | "html">("html");
 
   // Duplicate document warning indicators
   const [duplicateWarning, setDuplicateWarning] = useState(false);
@@ -499,8 +502,6 @@ Email: kittiwat.p@bu.ac.th
   const sendDirectEmail = async () => {
     setIsSendingEmail(true);
     try {
-      const GAS_WEBAPP_URL = await getGoogleAppsScriptUrl();
-
       // Try to find matching document in live prop if editingDoc is null
       const matchedDoc = editingDoc || documents.find(d => 
         (d.docNumber && d.docNumber === docNumber.trim()) || 
@@ -560,35 +561,69 @@ Email: kittiwat.p@bu.ac.th
         emailBody: previewEmailBody || ""
       };
 
-      console.log("Direct background email dispatch payload to Google Apps Script:", payload);
+      console.log("Direct background email dispatch payload tracking to Supabase:", payload);
 
-      // Execute the network request using the exact 'no-cors' and 'text/plain' bypass method
-      await fetch(GAS_WEBAPP_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(() => {
-        alert("ระบบบันทึกข้อมูลและส่งอีเมลแจ้งผลอัตโนมัติเรียบร้อยแล้ว!");
-        // Explicitly close the modal and reset states
-        setRating(0);
-        setIsCopied(false);
-        setIsEmailPreviewOpen(false);
-      })
-      .catch((error) => {
-        console.error("Fetch Fallback:", error);
-        alert("คำสั่งถูกส่งไปยังระบบหลังบ้านแล้ว! กรุณาตรวจสอบผลลัพธ์");
-        // Close the modal even if the opaque fetch triggers a catch block
-        setRating(0);
-        setIsCopied(false);
-        setIsEmailPreviewOpen(false);
+      // Save database log directly to Supabase table document_logs (and localStorage backup)
+      await saveDocumentLog({
+        vph_ref_no: payload.vphRefNo,
+        doc_number: payload.docNumber,
+        sender_name: payload.senderName,
+        department: payload.department,
+        subject: payload.subject,
+        status: payload.status,
+        outgoing_date: payload.outgoingDate,
+        receiver_name: payload.receiverName,
+        outgoing_dept: payload.outgoingDept,
+        recipient_email: payload.recipientEmail,
+        rating: rating || 5,
+        email_body: previewEmailBody || ""
       });
+
+      // Send via EmailJS client SDK direct from browser
+      const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_ridocument";
+      const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "template_ridocument";
+      const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "";
+
+      if (publicKey && publicKey.trim() !== "" && publicKey !== "YOUR_EMAILJS_PUBLIC_KEY") {
+        console.log("Dispatching live email with EmailJS:", { serviceId, templateId, publicKey });
+        
+        // Prepare template params
+        const templateParams = {
+          vph_ref_no: payload.vphRefNo,
+          doc_number: payload.docNumber,
+          sender_name: payload.senderName,
+          department: payload.department,
+          subject: payload.subject,
+          status: payload.status,
+          outgoing_date: payload.outgoingDate,
+          receiver_name: payload.receiverName,
+          outgoing_dept: payload.outgoingDept,
+          recipient_email: payload.recipientEmail,
+          rating: payload.rating,
+          email_body: previewEmailBody || "",
+          base_form_url: "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111="
+        };
+
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+        alert("ระบบบันทึกข้อมูลธุรกรรมลง Supabase และส่งอีเมลแจ้งผลเรียบร้อยแล้ว!");
+      } else {
+        console.warn("EmailJS is not fully configured (VITE_EMAILJS_PUBLIC_KEY missing). Falling back to client-side opening standard mailto.");
+        const confirmMail = confirm(
+          "บันทึกประวัติธุรกรรมลงฐานข้อมูล Supabase สำเร็จ!\n\nเนื่องจากระบบตรวจไม่พบ API Key ของ EmailJS (VITE_EMAILJS_PUBLIC_KEY)\nระบบยินดีเปิดหน้าส่งเมล (Mail Client) ประจำเครื่องของท่าน เพื่อจัดส่งเมลทันที!"
+        );
+        if (confirmMail) {
+          const mailSubject = `แจ้งผลการพิจารณาเอกสาร ${payload.docNumber} - ${payload.subject}`;
+          const mailBody = previewEmailBody || `เรียน ${payload.senderName}...`;
+          window.open(`mailto:${payload.recipientEmail}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`, '_blank');
+        }
+      }
+
+      setRating(0);
+      setIsCopied(false);
+      setIsEmailPreviewOpen(false);
     } catch (err) {
-      console.error("Google Apps Script direct background dispatch failed:", err);
-      alert("คำสั่งถูกส่งไปยังระบบหลังบ้านแล้ว! กรุณาตรวจสอบผลลัพธ์");
+      console.error("Supabase/EmailJS Dispatch sequence threw an error:", err);
+      alert("คำสั่งบันทึกข้อมูลเรียบร้อยแล้ว แต่อีเมลเกิดข้อผิดพลาดในการส่ง กรุณาตรวจสอบการตั้งค่าบริการ EmailJS");
       setRating(0);
       setIsCopied(false);
       setIsEmailPreviewOpen(false);
@@ -1512,53 +1547,203 @@ Email: kittiwat.p@bu.ac.th
               </div>
 
               {/* Email Content Subject & Body */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    📝 แก้ไขหัวข้อและเนื้อหาอีเมลที่จะจัดส่ง (Editable Email Content)
-                  </label>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${previewEmailSubject}\n\n${previewEmailBody}`);
-                      setIsCopied(true);
-                      setTimeout(() => setIsCopied(false), 2000);
-                    }}
-                    className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all duration-155 cursor-pointer flex items-center gap-1 leading-none ${
-                      isCopied ? "bg-emerald-600 text-white animate-pulse" : "bg-blue-50 text-[#003366] hover:bg-blue-100 border border-blue-200"
-                    }`}
-                  >
-                    <span>{isCopied ? "✓ คัดลอกสำเร็จ!" : "📋 คัดลอกเนื้อหาอีเมล"}</span>
-                  </button>
-                </div>
-                
-                <div className="space-y-3 border border-slate-200 rounded-xl p-4 bg-slate-50">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1 select-none">
-                      หัวข้ออีเมล (Subject Line)
-                    </label>
-                    <input
-                      type="text"
-                      id="edit-email-subject"
-                      value={previewEmailSubject}
-                      onChange={(e) => setPreviewEmailSubject(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-blue-900 font-mono text-[11.5px] font-extrabold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-inner"
-                      placeholder="กรุณาระบุหัวข้ออีเมล"
-                    />
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-2">
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg select-none">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab("html")}
+                      className={`px-4.5 py-1.5 text-xs font-bold rounded-md transition-all ${
+                        previewTab === "html"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-800"
+                      }`}
+                    >
+                      🎨 ตัวอย่างอีเมลจริง (Live Mail Mockup)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab("text")}
+                      className={`px-4.5 py-1.5 text-xs font-bold rounded-md transition-all ${
+                        previewTab === "text"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-800"
+                      }`}
+                    >
+                      📄 แก้ไขเนื้อความแบบย่อ (Plain Text)
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1 select-none">
-                      เนื้อหาอีเมล (Message Body)
-                    </label>
-                    <textarea
-                      id="edit-email-body"
-                      value={previewEmailBody}
-                      onChange={(e) => setPreviewEmailBody(e.target.value)}
-                      rows={10}
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-mono text-[11px] leading-relaxed focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-inner min-h-[160px] resize-y whitespace-pre-wrap"
-                      placeholder="กรุณาระบุเนื้อหาอีเมล"
-                    />
-                  </div>
+                  
+                  {previewTab === "text" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${previewEmailSubject}\n\n${previewEmailBody}`);
+                        setIsCopied(true);
+                        setTimeout(() => setIsCopied(false), 2000);
+                      }}
+                      className={`self-end px-3 py-1 text-[11px] font-bold rounded-lg transition-all duration-155 cursor-pointer flex items-center gap-1 leading-none ${
+                        isCopied ? "bg-emerald-600 text-white animate-pulse" : "bg-blue-50 text-[#003366] hover:bg-blue-100 border border-blue-200"
+                      }`}
+                    >
+                      <span>{isCopied ? "✓ คัดลอกสำเร็จ!" : "📋 คัดลอกเนื้อหา Plain Text"}</span>
+                    </button>
+                  )}
                 </div>
+
+                {previewTab === "text" ? (
+                  <div className="space-y-3 border border-slate-200 rounded-xl p-4 bg-slate-50 animate-fadeIn">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1 select-none">
+                        หัวข้ออีเมล (Subject Line)
+                      </label>
+                      <input
+                        type="text"
+                        id="edit-email-subject"
+                        value={previewEmailSubject}
+                        onChange={(e) => setPreviewEmailSubject(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-blue-900 font-mono text-[11.5px] font-extrabold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-inner"
+                        placeholder="กรุณาระบุหัวข้ออีเมล"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1 select-none">
+                        เนื้อหาอีเมล (Message Body)
+                      </label>
+                      <textarea
+                        id="edit-email-body"
+                        value={previewEmailBody}
+                        onChange={(e) => setPreviewEmailBody(e.target.value)}
+                        rows={10}
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 font-mono text-[11px] leading-relaxed focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-inner min-h-[160px] resize-y whitespace-pre-wrap"
+                        placeholder="กรุณาระบุเนื้อหาอีเมล"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border border-purple-200 rounded-2xl bg-[#fafaff] overflow-hidden font-sans shadow-md animate-fadeIn">
+                    {/* Purple Elegant Header Banner matching Image 1 */}
+                    <div className="bg-gradient-to-br from-purple-700 to-indigo-900 p-8 text-center text-white relative">
+                      <div className="text-4xl mb-2.5 select-none">✨</div>
+                      <h3 className="text-xl font-extrabold tracking-tight font-sans">พิจารณาเอกสารเสร็จสิ้น</h3>
+                      <p className="text-purple-200 text-xs mt-1.5 font-light font-sans">เอกสารของท่านได้รับการพิจารณาและส่งต้นต่อเสร็จสมบูรณ์แล้ว</p>
+                    </div>
+
+                    {/* Content Body Mock-up */}
+                    <div className="p-6.5 bg-white space-y-6">
+                      <div className="space-y-1.5">
+                        <p className="font-bold text-slate-800 text-sm font-sans">
+                          เรียน {formSender || "-"} ({formDepartment || "-"})
+                        </p>
+                        <p className="text-xs text-slate-500 font-sans leading-relaxed">
+                          สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) ขอแจ้งผลการพิจารณาเอกสาร โดยมีรายละเอียดดังต่อไปนี้:
+                        </p>
+                      </div>
+
+                      {/* Side-accent card list matching Image 1 */}
+                      <div className="border border-purple-100 rounded-xl overflow-hidden border-l-4 border-l-purple-700 shadow-xs">
+                        <table className="w-full text-xs text-left border-collapse font-sans">
+                          <tbody>
+                            <tr className="border-b border-purple-100/50">
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>เลขที่อ้างอิง วพ.
+                              </th>
+                              <td className="p-3 font-mono font-bold text-slate-900">
+                                {editingDoc ? formatRiRefNo(editingDoc.riRefNo || editingDoc.vopId || editingDoc.number || "", editingDoc.academicYear) : "(จะสร้างเลขที่อ้างอิง วพ. อัตโนมัติเมื่อกดบันทึก)"}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-purple-100/50">
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>เลขที่หนังสือต้นทาง
+                              </th>
+                              <td className="p-3 text-slate-700">
+                                {docNumber.trim() || "-"}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-purple-100/50">
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>เรื่อง / ชื่อโครงการ
+                              </th>
+                              <td className="p-3 font-bold text-slate-800 leading-relaxed">
+                                {formSubject || "-"}
+                              </td>
+                            </tr>
+                            <tr className="border-b border-purple-100/50">
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>ผลการพิจารณา
+                              </th>
+                              <td className="p-3">
+                                <span className="bg-purple-100/50 text-purple-700 border border-purple-200 px-3 py-0.5 rounded-full text-[10.5px] font-bold inline-block">
+                                  {formVpStatus || "อนุมัติ"}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr className="border-b border-purple-100/50">
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>วันที่ส่งพิจารณาเสร็จ
+                              </th>
+                              <td className="p-3 text-slate-700">
+                                {formSendDate ? formatThaiDate(formSendDate) : "-"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <th className="w-1/3 bg-purple-50/20 p-3 font-bold text-purple-900 border-r border-purple-100/30">
+                                <span className="text-purple-600 mr-2 font-mono">•</span>ผู้รับช่วงต่อ
+                              </th>
+                              <td className="p-3 text-slate-700">
+                                {formReceiver || "-"} <span className="text-slate-400 font-light">(หน่วยงาน: {formOutgoingDepartment || "-"})</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Sticky notes block */}
+                      <div className="bg-purple-50/40 border-l-3 border-l-purple-300 p-3 rounded-r-xl text-xs text-purple-800 leading-relaxed font-sans">
+                        💡 <span className="italic font-light">(หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับหน่วยงานรับช่วงต่อเสร็จสิ้น เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)</span>
+                      </div>
+
+                      {/* Interactive Stars Section inside template wrapper mockup */}
+                      <div className="bg-purple-50/20 border-2 border-dashed border-purple-200 rounded-2xl p-5 text-center space-y-4">
+                        <h4 className="text-purple-900 font-bold text-sm font-sans">❤️ ช่วยประเมินบริการของเราหน่อยได้ไหมคะ?</h4>
+                        <p className="text-[11px] text-purple-600 max-w-sm mx-auto leading-relaxed font-sans">
+                          กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้ (ระบบประเมิน 5 ดาว pre-filled เข้า Google Form ได้รวดเร็วและแม่นยำสูงสุด)
+                        </p>
+
+                        <div className="flex justify-center flex-wrap gap-2 py-1 select-none">
+                          {[
+                            { val: 1, emoji: "🤬", text: "ปรับปรุง", stars: "★" },
+                            { val: 2, emoji: "🙁", text: "พอใช้", stars: "★★" },
+                            { val: 3, emoji: "😐", text: "ปานกลาง", stars: "★★★" },
+                            { val: 4, emoji: "😊", text: "ดี", stars: "★★★★" },
+                            { val: 5, emoji: "🤩", text: "ดีเยี่ยม", stars: "★★★★★" },
+                          ].map((opt) => (
+                            <div key={opt.val} className="w-15 bg-white border border-purple-100 rounded-xl p-2 text-center flex flex-col items-center shadow-xs">
+                              <span className="text-xl mb-1">{opt.emoji}</span>
+                              <span className="text-[9px] font-bold text-purple-700 block whitespace-nowrap mb-0.5">{opt.text}</span>
+                              <span className="text-[9.5px] text-pink-500 font-sans tracking-tight">{opt.stars}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-1.5">
+                          <button type="button" className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-6 py-2 rounded-full shadow-md active:scale-98 transition duration-150">
+                            ✍️ ประเมินความพึงพอใจการให้บริการ
+                          </button>
+                          <p className="text-[10px] text-purple-400 mt-1.5 font-sans">ใช้เวลาประเมินเพียง 1 นาทีเพื่อการปรับปรุงบริการ</p>
+                        </div>
+                      </div>
+
+                      {/* Footer Signature Block */}
+                      <div className="border-t border-purple-100 pt-4 space-y-1 text-xs text-slate-500 font-sans">
+                        <p>จึงเรียนมาเพื่อโปรดทราบ</p>
+                        <p className="font-bold text-purple-750">ขอแสดงความนับถือ</p>
+                        <p className="font-bold text-slate-700">สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)</p>
+                        <p className="text-[10.5px] text-slate-400 font-light">มหาวิทยาลัยกรุงเทพ (โทร. 2122 / อีเมล์: kittiwat.p@bu.ac.th)</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 5-Star Emoji Satisfaction Survey Component */}

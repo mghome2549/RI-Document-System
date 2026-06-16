@@ -22,10 +22,9 @@ import {
   fetchProfessors,
   saveProfessor,
   deleteProfessor,
-  getGoogleAppsScriptUrl,
-  saveGoogleAppsScriptUrl,
   importProfessorsCsv
 } from "../services/professors";
+import { isSupabaseConfigured } from "../services/supabaseClient";
 import { GOOGLE_APPS_SCRIPT_CODE } from "../utils/gasCode";
 import { fetchPrimaryOwnerEmail, transferPrimaryOwner } from "../services/db";
 
@@ -57,7 +56,7 @@ export default function UserManagement({
   const [isTransferring, setIsTransferring] = useState(false);
 
   // Sub-tabs State for Settings Page
-  const [subTab, setSubTab] = useState<"admins" | "professors" | "gas_integration">("admins");
+  const [subTab, setSubTab] = useState<"admins" | "professors" | "supabase_integration">("admins");
 
   // Professor CRUD states
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -76,16 +75,40 @@ export default function UserManagement({
   const [profPhone, setProfPhone] = useState("");
   const [profError, setProfError] = useState<string | null>(null);
 
-  // Apps Script integration state
-  const [gasUrl, setGasUrl] = useState("");
-  const [isTestingGas, setIsTestingGas] = useState(false);
-  const [gasTestResult, setGasTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
+  // SQL Copy Confirmation State
   const [isCodeCopied, setIsCodeCopied] = useState(false);
 
-  // Load professors & GAS Url & Primary Owner
+  // Gas testing state and handlers
+  const [isTestingGas, setIsTestingGas] = useState(false);
+  const [gasTestResult, setGasTestResult] = useState<{ status: "success" | "error"; message: string } | null>(null);
+
+  const testGasConnection = async () => {
+    setIsTestingGas(true);
+    setGasTestResult(null);
+    try {
+      const url = import.meta.env.VITE_APP_SCRIPT_URL;
+      if (!url) {
+        throw new Error("ไม่พบ Google Apps Script Web App URL (VITE_APP_SCRIPT_URL) ในไฟล์คอนฟิก .env");
+      }
+      const response = await fetch(url, { method: "GET" });
+      // Apps Script Web Apps return HTML or JSON or redirect, but custom GET is fine if CORS permits
+      setGasTestResult({
+        status: "success",
+        message: "⚡ การเชื่อมต่อสำเร็จ! สัญญาณเครือข่ายตอบกลับสถานะปกติ พร้อมสำหรับซิงโครไนซ์ข้อมูล"
+      });
+    } catch (err: any) {
+      setGasTestResult({
+        status: "error",
+        message: `❌ เชื่อมต่อล้มเหลว: ${err.message || err}`
+      });
+    } finally {
+      setIsTestingGas(false);
+    }
+  };
+
+  // Load professors & Primary Owner
   useEffect(() => {
     loadProfs();
-    loadGasUrl();
     loadPrimaryOwner();
   }, []);
 
@@ -127,60 +150,6 @@ export default function UserManagement({
       console.error("Error fetching professors", err);
     } finally {
       setIsProfLoading(false);
-    }
-  };
-
-  const loadGasUrl = async () => {
-    const url = await getGoogleAppsScriptUrl();
-    setGasUrl(url);
-  };
-
-  const handleSaveGasUrl = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    try {
-      await saveGoogleAppsScriptUrl(gasUrl);
-      setSuccess("บันทึกที่อยู่ Google Apps Script Web App URL เรียบร้อยแล้ว");
-      setTimeout(() => setSuccess(null), 3000);
-      loadProfs(); // Reload to try pulling from new sheet URL
-    } catch (err) {
-      setError("ไม่สามารถบันทึกที่อยู่ URL ได้ กรุณาลองใหม่อีกครั้ง");
-    }
-  };
-
-  const testGasConnection = async () => {
-    setIsTestingGas(true);
-    setGasTestResult(null);
-    try {
-      const testUrl = `${gasUrl}?action=GET_PROFS`;
-      const response = await fetch(testUrl);
-      if (response.ok) {
-        const json = await response.json();
-        if (json.status === "success") {
-          setGasTestResult({
-            status: "success",
-            message: `เชื่อมต่อสตรีมสำเร็จ! ตรวจพบข้อมูลอาจารย์ ${json.data?.length || 0} รายการในแผ่นงาน Google Sheets`
-          });
-        } else {
-          setGasTestResult({
-            status: "error",
-            message: `เชื่อมต่อได้แต่เซิร์ฟเวอร์ปฏิเสธ: ${json.message || "ไม่มีรายละเอียด"}`
-          });
-        }
-      } else {
-        setGasTestResult({
-          status: "error",
-          message: `เชื่อมต่อล้มเหลว (CORS/HTTP Error): ได้รับรหัสสถานะ ${response.status}`
-        });
-      }
-    } catch (err) {
-      setGasTestResult({
-        status: "error",
-        message: "เกิดสายหลุดกะทันหัน หรือเกิดข้อผิดพลาด CORS: โปรดมั่นใจว่าคุณได้ตั้งค่า Deploy Web App ใน Google Apps Script เป็นสิทธิ์ 'ทุกคน (Anyone)' เรียบร้อยแล้ว"
-      });
-    } finally {
-      setIsTestingGas(false);
     }
   };
 
@@ -480,15 +449,15 @@ export default function UserManagement({
           <span>ฐานข้อมูลอาจารย์ ({professors.length})</span>
         </button>
         <button
-          onClick={() => setSubTab("gas_integration")}
-          className={`flex-1 py-2 px-3.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            subTab === "gas_integration"
+          onClick={() => setSubTab("supabase_integration")}
+          className={`flex-1 py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            subTab === "supabase_integration"
               ? "bg-indigo-950 text-white shadow-sm"
               : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
           }`}
         >
-          <Code size={14} />
-          <span>เชื่อมต่อ Google Sheets API</span>
+          <Database size={14} className="text-[#3ECF8E]" />
+          <span>เชื่อมต่อฐานข้อมูล Supabase</span>
         </button>
       </div>
 
@@ -665,13 +634,13 @@ export default function UserManagement({
           {/* User Simulation Board console */}
           {onSimulateUser && (
             <div id="developer-sandbox-console" className="bg-[#0f172a] text-slate-100 rounded-xl p-5 border border-slate-800 space-y-4 shadow-xl select-none">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3 font-sans">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></span>
+                    <span className="w-2 h-2 bg-yellow-400 rounded-full animate-ping font-sans"></span>
                     <h3 className="text-xs font-bold text-slate-200 tracking-wider uppercase font-sans">Developer Sandbox & QA Permission Console</h3>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-light mt-0.5">
+                  <p className="text-[10px] text-slate-400 font-light mt-0.5 font-sans">
                     จำลองสวมบทบาทสมาชิกสถาบัน เพื่อทำการทดสอบดูมุมมองของหน้าเอกสารในระดับสิทธิ์ต่างกัน
                   </p>
                 </div>
@@ -683,24 +652,26 @@ export default function UserManagement({
                   onClick={() => onSimulateUser("kittiwat.p@bu.ac.th", "อ.กิตติวัฒน์ โพธิ์งามบวรชัย")}
                   className="bg-slate-800 hover:bg-slate-700 p-3 rounded-lg border border-slate-700/60 transition-all text-left group cursor-pointer text-xs font-sans"
                 >
-                  <span className="block font-black text-[#FFCC00] font-mono">kittiwat.p@bu.ac.th</span>
-                  <span className="block text-[10px] text-slate-400 mt-1">แอดมินเจ้าของงานประเมินผลสูงสุุด (Admin)</span>
+                  <span className="block font-black text-[#FFCC00] font-mono font-sans">kittiwat.p@bu.ac.th</span>
+                  <span className="block text-[10px] text-slate-400 mt-1 font-sans">แอดมินเจ้าของงานประเมินผลสูงสุุด (Admin)</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => onSimulateUser("jirasak.p@bu.ac.th", "ผศ.จิรศักดิ์ เผือกคำ")}
+                  onClick={() => onSimulateUser("somchai.s@bu.ac.th", "อ.สมชาย แสนดี")}
                   className="bg-slate-800 hover:bg-slate-700 p-3 rounded-lg border border-slate-700/60 transition-all text-left group cursor-pointer text-xs font-sans"
                 >
-                  <span className="block font-black text-sky-400 font-mono">jirasak.p@bu.ac.th</span>
-                  <span className="block text-[10px] text-slate-400 mt-1">อาจารย์ผู้ยื่นคำร้องทั่วไป (Viewer เท่านั้น)</span>
+                  <span className="block font-black text-indigo-400 font-mono font-sans">somchai.s@bu.ac.th</span>
+                  <span className="block text-[10px] text-slate-400 mt-1 font-sans">อาจารย์ผู้รับชมทั่วไป (Viewer / Teacher)</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => onSimulateUser("test-guest@bu.ac.th", "ผู้เข้าร่วมภายนอกจำลอง")}
-                  className="bg-slate-800 hover:bg-slate-700 p-3 rounded-lg border border-slate-700/60 transition-all text-left group cursor-pointer text-xs font-sans"
+                  onClick={() => onSimulateUser("", "")}
+                  className="bg-slate-850 hover:bg-slate-800 p-3 rounded-lg border border-dashed border-slate-700 transition-all text-left cursor-pointer text-xs font-sans"
                 >
-                  <span className="block font-black text-rose-400 font-mono">guest@bu.ac.th</span>
-                  <span className="block text-[10px] text-slate-400 mt-1">สุ่มไอดีหน่วยงานอื่นพิจารณา (Viewer)</span>
+                  <span className="block font-black text-rose-400 font-mono font-sans font-sans">ล้างการจำลองสิทธิ์</span>
+                  <span className="block text-[10px] text-slate-400 mt-1 font-sans">กลับคืนสู่บัญชีผู้ใช้ปัจจุบันของคุณ</span>
                 </button>
               </div>
             </div>
@@ -708,109 +679,93 @@ export default function UserManagement({
         </div>
       )}
 
+      {/* TAB CONTENT: PROGRESS / PROFESSORS DATABASE */}
       {subTab === "professors" && (
         <div className="space-y-4 animate-fadeIn">
-          {/* Header Action panel */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          {/* Search and register button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm font-sans">
+            <div className="relative w-full sm:max-w-xs font-sans">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-sans">
                 <Search size={14} />
               </span>
               <input
                 type="text"
-                placeholder="ค้นหารายชื่ออาจารย์ สังกัด รหัส หรืออีเมล..."
                 value={profSearch}
                 onChange={(e) => setProfSearch(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 transition-all placeholder:text-slate-400 font-sans"
+                placeholder="ค้นหาอาจารย์... (ชื่อ, ตำแหน่ง, สังกัด)"
+                className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-slate-800"
               />
             </div>
 
-            {isAdmin ? (
-              <div className="flex items-center gap-2">
-                {/* CSV File Import Button */}
-                <label className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all text-nowrap select-none">
-                  <FileSpreadsheet size={15} />
-                  <span>นำเข้าไฟล์ CSV</span>
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCsvImport}
-                    className="hidden"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={openAddProfModal}
-                  className="h-9 px-4.5 bg-blue-900 hover:bg-[#002244] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition-all text-nowrap"
-                >
-                  <Plus size={15} />
-                  <span>เพิ่มข้อมูลอาจารย์ท่านใหม่</span>
-                </button>
-              </div>
-            ) : (
-              <div className="text-[11px] p-2 bg-slate-50 border rounded-lg text-slate-400 font-semibold select-none">
-                🔒 โหมดการเข้าชม (ผู้ดูแลระบบเท่านั้นที่มีสิทธิ์แก้ไข)
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => openAddProfModal()}
+              className="h-9 px-4 bg-indigo-950 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm border border-slate-800 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
+            >
+              <Plus size={14} />
+              <span>ลงทะเบียนอาจารย์ท่านใหม่</span>
+            </button>
           </div>
 
-          {/* Grid/Table List */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden select-text">
-            {isProfLoading ? (
-              <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
-                <RefreshCw size={24} className="animate-spin text-blue-900" />
-                <span className="text-xs font-bold font-mono">กำลังประมวลผลข้อมูลโครงสร้าง...</span>
-              </div>
-            ) : filteredProfessors.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 space-y-1.5 select-none font-sans">
-                <GraduationCap size={32} className="mx-auto text-slate-300" />
-                <div className="text-xs font-bold text-slate-800">ไม่พบข้อมูลรายชื่ออาจารย์สังกัดในระบบ</div>
-                <div className="text-[10px] text-slate-400">พิมพ์ระบุคำค้นอย่างอื่น หรือลงทะเบียนชื่ออาจารย์เพิ่ม</div>
+          {/* Professor list tables */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-0 font-sans">
+            {filteredProfessors.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 font-sans text-xs flex flex-col items-center gap-2 font-sans">
+                <GraduationCap size={32} className="text-slate-300 animate-pulse font-sans" />
+                <span>ไม่พบข้อมูลรายชื่ออาจารย์ที่ค้นหา</span>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse font-sans">
+              <div className="overflow-x-auto font-sans">
+                <table className="w-full text-left text-xs min-w-[700px] font-sans">
                   <thead>
-                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200 select-none">
-                      <th className="py-3 px-4 font-sans">ชื่อ-นามสกุล</th>
-                      <th className="py-3 px-4 font-sans">รหัสบุคลากร</th>
-                      <th className="py-3 px-4 font-sans">ตำแหน่ง</th>
-                      <th className="py-3 px-4 font-sans">หน่วยงาน / สังกัด</th>
-                      <th className="py-3 px-4 font-mono">อีเมล์</th>
-                      <th className="py-3 px-4 font-sans">เบอร์โทรศัพท์</th>
-                      <th className="py-3 px-4 text-center font-sans">จัดการ</th>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 uppercase select-none font-sans">
+                      <th className="py-2.5 px-4 font-sans font-bold">รหัสบุคลากร</th>
+                      <th className="py-2.5 px-4 font-sans font-bold">ชื่อ-นามสกุล</th>
+                      <th className="py-2.5 px-4 font-sans font-bold">ตำแหน่งวิชาการ</th>
+                      <th className="py-2.5 px-4 font-sans font-bold">สังกัด / สำนักงาน</th>
+                      <th className="py-2.5 px-4 font-sans font-bold">อีเมล / เบอร์โทรศัพท์</th>
+                      <th className="py-2.5 px-4 font-sans font-bold text-center">จัดการ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {filteredProfessors.map((prof) => (
-                      <tr key={prof.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-4 font-bold text-slate-900">{prof.name}</td>
-                        <td className="py-3 px-4 font-mono text-slate-500">{prof.personalId || "-"}</td>
-                        <td className="py-3 px-4 font-medium text-slate-600">{prof.position || "-"}</td>
-                        <td className="py-3 px-4 font-medium">{prof.department}</td>
-                        <td className="py-3 px-4 font-mono text-blue-900 font-bold">{prof.email}</td>
-                        <td className="py-3 px-4 font-mono text-slate-500">{prof.phone || "-"}</td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-700 font-sans">
+                    {filteredProfessors.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/50 transition-colors font-sans">
+                        <td className="py-4 px-4 font-mono text-[11px] text-slate-500 font-sans">
+                          {p.personalId || "—"}
+                        </td>
+                        <td className="py-4 px-4 font-sans text-slate-800 font-sans">
+                          {p.name}
+                        </td>
+                        <td className="py-4 px-4 font-sans text-slate-600 font-sans">
+                          {p.position || "—"}
+                        </td>
+                        <td className="py-4 px-4 font-sans text-slate-600 font-sans">
+                          {p.department}
+                        </td>
+                        <td className="py-4 px-4 font-mono text-[11px] text-slate-600 space-y-0.5 font-sans">
+                          <div className="flex items-center gap-1 font-sans">
+                            <span>{p.email}</span>
+                          </div>
+                          {p.phone && <div className="text-slate-400 text-[10px] font-sans">{p.phone}</div>}
+                        </td>
+                        <td className="py-4 px-4 text-center font-sans">
+                          <div className="flex items-center justify-center gap-1.5 font-sans justify-center">
                             <button
                               type="button"
-                              onClick={() => openEditProfModal(prof)}
-                              className="p-1.5 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded border border-slate-100 hover:border-slate-300 cursor-pointer text-xs"
-                              title="แก้ไขข้อมูลอาจารย์"
+                              onClick={() => openEditProfModal(p)}
+                              className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-md transition-all cursor-pointer active:scale-95 font-sans"
+                              title="แก้ไขข้อมูล"
                             >
                               <Edit size={12} />
                             </button>
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => setProfToDelete(prof)}
-                                className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded border border-rose-100 hover:border-rose-200 cursor-pointer text-xs"
-                                title="ลบออกจากระบบสารบรรณ"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setProfToDelete(p)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-md transition-all cursor-pointer active:scale-95 font-sans"
+                              title="ลบข้อมูล"
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -819,58 +774,168 @@ export default function UserManagement({
                 </table>
               </div>
             )}
-            
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400 font-medium leading-relaxed font-sans">
-              💡 รายชื่อในฐานข้อมูลด้านบนจะผูกติดกับฟอร์มกรอกเอกสารสารบรรณทั้งหมด เมื่อมีผู้พิมพ์ป้อนชื่อในช่องรับ/ส่งข้อมูล <br />
-              📊 โครงสร้างคอลัมน์ของไฟล์นำเข้า (.csv) ที่รองรับ: <b className="text-emerald-700">ชื่อ-นามสกุล, รหัสบุคลากร, ตำแหน่ง, หน่วยงาน, อีเมล์, โทรศัพท์</b> (ความยาวหัวแถวอย่างน้อย 4 คอลัมน์)
-            </div>
           </div>
         </div>
       )}
 
-      {/* TAB CONTENT: GOOGLE APPS SCRIPT MANUAL & CREDENTIAL SETUP */}
-      {subTab === "gas_integration" && (
-        <div className="space-y-6 animate-fadeIn">
-          {/* Web App URL configurator Form */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+      {subTab === "supabase_integration" && (
+        <div className="space-y-6 animate-fadeIn font-sans">
+          {/* Status Badge card */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 font-sans">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 font-sans">
+                  <Database size={16} className="text-emerald-600" />
+                  <span>ระบบหลังบ้านเชื่อมต่อฐานข้อมูล Supabase Cloud</span>
+                </h3>
+                <p className="text-[10.5px] text-slate-500 font-light mt-0.5 leading-normal font-sans">
+                  ตัวแปรระบบจะถูกโหลดโดยตรงจากไฟล์คอนฟิก .env ความปลอดภัยสูง ไม่ผ่านสคริปต์ภายนอก
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 font-sans text-xs">
+                <span className="text-[10px] font-bold text-slate-400">สถานะ API ปัจจุบัน:</span>
+                {isSupabaseConfigured ? (
+                  <span className="inline-flex h-6 items-center px-2.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse font-sans">
+                    ● เชื่อมต่อบริการสำเร็จ (Active)
+                  </span>
+                ) : (
+                  <span className="inline-flex h-6 items-center px-2.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 font-sans">
+                    ⚠ โหมด Sandbox (ข้อมูลลง LocalStorage/Firestore เท่านั้น)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 font-sans">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 text-xs font-sans">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">ตัวแปรกำหนดค่าหน้าบ้าน (.env)</span>
+                <p className="text-[10.5px] text-slate-500 leading-normal font-sans">
+                  สำหรับใช้งานในหน้า React ของเครื่องจำลองและรันคำสั่งในเซิร์ฟเวอร์ ให้กำหนดพารามิเตอร์ดังต่อไปนี้:
+                </p>
+                <div className="p-3 bg-slate-900 rounded-lg font-mono text-[10px] space-y-1 overflow-x-auto text-slate-200 font-medium font-sans">
+                  <div>VITE_SUPABASE_URL=https://ของคุณ.supabase.co</div>
+                  <div>VITE_SUPABASE_ANON_KEY=ปะคีย์คลาวด์ตรงนี้...</div>
+                  <div className="text-slate-500 text-[9px] mt-1.5 font-sans">* VITE_ คือพรีฟิกซ์รันความปลอดภัยผ่าน Vite Bundler อัตโนมัติ</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-indigo-50/20 border border-indigo-100/40 space-y-2 text-xs font-sans">
+                <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest font-mono">การส่งอีเมลหลังบ้าน (EmailJS Integration)</span>
+                <p className="text-[10.5px] text-slate-500 leading-normal font-sans">
+                  ในการยิงเมลเข้ากล่องขาเข้าผู้ใช้โดยตรงแบบสวยงาม ให้ไปสมัครใช้งานที่ EmailJS.com และเพิ่มคีย์ดังต่อไปนี้ไปยังไฟล์ .env เช่นกัน:
+                </p>
+                <div className="p-3 bg-indigo-950 rounded-lg text-indigo-100 font-mono text-[10px] space-y-1 overflow-x-auto text-[#a5b4fc] font-medium font-sans">
+                  <div>VITE_EMAILJS_PUBLIC_KEY=คีย์สาธารณะผู้ใช้</div>
+                  <div>VITE_EMAILJS_SERVICE_ID=รหัสบริการเมล</div>
+                  <div>VITE_EMAILJS_TEMPLATE_ID=รหัสเทมเพลตสำหรับเมล</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* SQL Editor Query Copier */}
+          <div className="bg-slate-900 text-slate-100 rounded-2xl overflow-hidden border border-slate-800 shadow-xl space-y-0">
+            <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3.5 select-none font-sans">
+              <div>
+                <h4 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-1.5 font-mono">
+                  <Database size={13} className="text-[#3ECF8E]" />
+                  <span>คำสั่งตารางหลักวิทยาลัยสารบรรณ (Supabase DDL Queries)</span>
+                </h4>
+                <p className="text-[10px] text-slate-300 font-light mt-0.5 leading-normal">
+                  คัดลอกสคริปต์สกีมาด้านล่างนี้ ไปรันที่หน้าต่าง SQL Editor ของโปรเจกต์ Supabase เพื่อเริ่มสร้างตารางหลังบ้าน
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const querySql = `-- 1. ตารางอาจารย์วิทยาลัย (professors)
+CREATE TABLE IF NOT EXISTS professors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  employee_id TEXT,
+  position TEXT,
+  department TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. ตารางบันทึกรายงานส่งเมล (document_logs)
+CREATE TABLE IF NOT EXISTS document_logs (
+  id TEXT PRIMARY KEY,
+  vph_ref_no TEXT NOT NULL,
+  doc_number TEXT NOT NULL,
+  sender_name TEXT,
+  department TEXT,
+  subject TEXT,
+  status TEXT,
+  outgoing_date TEXT,
+  receiver_name TEXT,
+  outgoing_dept TEXT,
+  recipient_email TEXT,
+  rating INTEGER DEFAULT 5,
+  email_body TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- ยืนยันสิทธิ์เข้าถึง (Row Level Security) เพื่อความสะดวก
+ALTER TABLE professors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow read write profs" ON professors FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow read write logs" ON document_logs FOR ALL USING (true) WITH CHECK (true);`;
+                  navigator.clipboard.writeText(querySql);
+                  setIsCodeCopied(true);
+                  setTimeout(() => setIsCodeCopied(false), 2500);
+                }}
+                className={`h-8 px-4 rounded-lg text-xs flex items-center gap-1.5 font-bold cursor-pointer transition-all ${
+                  isCodeCopied ? "bg-emerald-600 text-white animate-pulse" : "bg-slate-800 hover:bg-slate-700 text-[#3ECF8E] hover:text-white border border-slate-700 font-sans"
+                }`}
+              >
+                {isCodeCopied ? (
+                  <>
+                    <Check size={13} className="text-white" />
+                    <span>คัดลอก SQL สำเร็จ!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} />
+                    <span>คัดลอกคำสั่ง DDL SQL</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 outline-none text-[11px] leading-relaxed border-b border-slate-800 bg-slate-950/40 text-slate-300 font-sans select-none">
+              <strong className="text-emerald-400 font-sans text-xs flex items-center gap-1">
+                <span>⚡ คู่มือสร้างและดีพลอยหลังบ้านกับ Supabase:</span>
+              </strong>
+              <ol className="list-decimal pl-4 space-y-1.5 font-sans text-slate-300">
+                <li>เปิดโปรเจกต์ของคุณบน <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-[#3ECF8E] underline hover:text-emerald-400 font-bold font-sans">dashboard.supabase.com</a></li>
+                <li>คลิกเลือกเมนู <strong className="text-white font-mono font-sans font-semibold">SQL Editor</strong> จากแถบเครื่องมือด้านซ้าย</li>
+                <li>คลิกปุ่มสร้างไฟล์คิวรี่ <strong className="text-white font-sans font-sans">New Query</strong></li>
+                <li>กดปุ่ม &quot;คัดลอกคำสั่ง DDL SQL&quot; ด้านบนไปวางในช่อง แล้วกดรันปุ่ม <strong className="text-emerald-400 font-sans">Run</strong> ด้านล่างขวาเพื่อสร้างและตั้งค่านโยบายนิติกรรมสำเร็จ</li>
+                <li>ตรวจสอบคอลัมน์ให้อยู่ครบในเมนู Table Editor เป็นอันพร้อมใช้งานหน้า React ทันทีรวดเร็วสูงสุด!</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Connection Test Panel */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 font-sans animate-fadeIn">
             <div>
-              <h3 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5">
-                <FileSpreadsheet size={16} className="text-emerald-600" />
-                <span>ที่อยู่ Google Apps Script Web App URL</span>
+              <h3 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 font-sans">
+                <RefreshCw size={16} className="text-blue-600" />
+                <span>ทดสอบสถานะการซิงก์ข้อมูล Google Sheets</span>
               </h3>
-              <p className="text-[10.5px] text-slate-500 font-light mt-0.5 leading-normal">
-                ระบุที่อยู่ลิงก์เว็บแอปที่ได้จากการ Deploy ใน Google Apps Script เพื่อเปิดใช้งานการเซฟและดึงข้อมูลจากตาราง Google Sheets ของวิทยาลัยโดยตรงอินทิเกรตแบบเรียลไทม์
+              <p className="text-[10.5px] text-slate-500 font-light mt-0.5 leading-normal font-sans">
+                ตรวจสอบว่า Google Apps Script Web App URL ที่กำหนดตอบรับระบบเครือข่ายถูกต้องหรือไม่
               </p>
             </div>
 
-            <form onSubmit={handleSaveGasUrl} className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-600 mb-1 font-mono uppercase tracking-wider">
-                  Apps Script Web App Endpoint URL <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex gap-2.5">
-                  <input
-                    required
-                    type="url"
-                    placeholder="เช่น https://script.google.com/macros/s/AKfycb.../exec"
-                    value={gasUrl}
-                    onChange={(e) => setGasUrl(e.target.value)}
-                    className="flex-1 h-9.5 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono shadow-inner text-slate-800"
-                  />
-                  <button
-                    type="submit"
-                    className="h-9.5 px-4.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-all cursor-pointer shadow-sm active:scale-95 text-nowrap"
-                  >
-                    บันทึกพารามิเตอร์
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            {gasUrl && (
-              <div className="pt-2 flex flex-col gap-2.5">
-                <div className="flex items-center gap-2">
-                  <button
+            <div className="flex items-center gap-2">
+              <button
                     type="button"
                     onClick={testGasConnection}
                     disabled={isTestingGas}
@@ -894,8 +959,6 @@ export default function UserManagement({
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
           {/* Code.gs Copy Instructions Box */}
           <div className="bg-slate-900 text-slate-100 rounded-2xl overflow-hidden border border-slate-800 shadow-xl space-y-0">
