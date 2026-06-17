@@ -638,6 +638,7 @@ Email: kittiwat.p@bu.ac.th
       const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docId}`;
 
       const templateParams = {
+        // [ระบบดั้งเดิม / Fallbacks]
         recipient_name: docData.senderName || docData.sender || "-",
         doc_number: docData.docNumber || docData.documentNumber || "-",
         status: docData.status || "อนุมัติ",
@@ -650,12 +651,22 @@ Email: kittiwat.p@bu.ac.th
         outgoing_dept: docData.outgoingDept || "-",
         email_body: docData.emailBody || "",
         html_body: generateHTMLTemplate(docData, docId),
-        // ลิงก์ดาวประเมินอัจฉริยะ (1-5 ดาว) ส่งพ่วงไปใน templateParams
         star_link_1: `${baseRatingUrl}&score=1`,
         star_link_2: `${baseRatingUrl}&score=2`,
         star_link_3: `${baseRatingUrl}&score=3`,
         star_link_4: `${baseRatingUrl}&score=4`,
-        star_link_5: `${baseRatingUrl}&score=5`
+        star_link_5: `${baseRatingUrl}&score=5`,
+
+        // [ระบบอัปเดตใหม่ตามความต้องการของผู้ใช้และภาพดีไซน์เทมเพลต]
+        to_email: recipientEmail || docData.recipientEmail || docData.email || "kittiwat.p@bu.ac.th",
+        vwp_id: docData.vphRefNo || docData.vwpId || docId || "",
+        project_name: docData.subject || docData.title || "-",
+        result_status: docData.status || "อนุมัติ",
+        rating_link_1: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=1`,
+        rating_link_2: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=2`,
+        rating_link_3: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=3`,
+        rating_link_4: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=4`,
+        rating_link_5: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=5`
       };
 
       if (!publicKey) {
