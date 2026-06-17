@@ -630,8 +630,8 @@ Email: kittiwat.p@bu.ac.th
   // ฟังก์ชันส่งสัญญานเตือนแจ้งผลพิจารณาทางอีเมลตรงจากหน้าบ้าน React อัตโนมัติ (EmailJS Integration)
   const sendNotificationEmail = async (docData: any, recipientEmail: string) => {
     try {
-      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_kcajb7t";
-      let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_vwp_report";
+      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
+      let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
       let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "";
 
       const docId = docData.id || docData.vphRefNo || "";
@@ -781,35 +781,29 @@ Email: kittiwat.p@bu.ac.th
         console.warn("Error checking process.env", err);
       }
 
-      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_ridocument";
-      if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_ridocument";
+      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
+      if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
       if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "";
 
-      if (publicKey && publicKey.trim() !== "" && publicKey !== "YOUR_EMAILJS_PUBLIC_KEY") {
-        const mailObject = {
-          ...payload,
-          id: currentDoc.id
-        };
+      // พยายามส่งอีเมลแจ้งผลพิจารณาตรงจากหน้าบ้านทันทีผ่าน SDK เสมอ (ไม่เปิด Mail Client ประจำเครื่อง)
+      const mailObject = {
+        ...payload,
+        id: currentDoc.id
+      };
+
+      try {
         await sendNotificationEmail(mailObject, payload.recipientEmail);
         
         // Success notification and automatically close modal
         setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 4500);
-      } else {
-        console.warn("EmailJS is not fully configured (VITE_EMAILJS_PUBLIC_KEY missing). Falling back to client-side opening standard mailto.");
-        const confirmMail = confirm(
-          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nเนื่องจากระบบตรวจไม่พบ API Key ของ EmailJS\nระบบยินดีเปิดหน้าส่งเมล (Mail Client) ประจำเครื่องของท่าน เพื่อจัดส่งเมลทันที!"
+      } catch (sendErr) {
+        console.error("EmailJS live dispatch error:", sendErr);
+        // แสดงข้อความแนะนำวิธีแก้ไขอย่างชัดเจน แทนที่จะไปเปิด mailto บังคับพาร์ส
+        alert(
+          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแแต่องระบบตรวจไม่พบ API Key ของ EmailJS ใน Environment (REACT_APP_EMAILJS_PUBLIC_KEY) หรือกรอกคำที่ถูกต้อง\n\nกรุณาตรวจสอบการตั้งค่าคีย์เพื่อส่งผ่านระบบเว็บโดยตรง"
         );
-        if (confirmMail) {
-          const mailSubject = `แจ้งผลการพิจารณาเอกสาร ${payload.docNumber} - ${payload.subject}`;
-          const mailBody = previewEmailBody || `เรียน ${payload.senderName}...`;
-          window.open(`mailto:${payload.recipientEmail}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`, '_blank');
-        }
-        
-        setToastMessage("เปิดไคลเอนต์อีเมลเพื่อจัดส่งเรียบร้อย!");
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 4500);
       }
 
       setRating(0);
