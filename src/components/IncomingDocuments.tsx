@@ -630,9 +630,23 @@ Email: kittiwat.p@bu.ac.th
   // ฟังก์ชันส่งสัญญานเตือนแจ้งผลพิจารณาทางอีเมลตรงจากหน้าบ้าน React อัตโนมัติ (EmailJS Integration)
   const sendNotificationEmail = async (docData: any, recipientEmail: string) => {
     try {
-      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_8tlyawq";
-      let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
-      let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
+      let serviceId = "";
+      let templateId = "";
+      let publicKey = "";
+
+      try {
+        if (typeof process !== "undefined" && process?.env) {
+          serviceId = process.env.REACT_APP_EMAILJS_SERVICE_ID || process.env.VITE_EMAILJS_SERVICE_ID || "";
+          templateId = process.env.REACT_APP_EMAILJS_TEMPLATE_ID || process.env.VITE_EMAILJS_TEMPLATE_ID || "";
+          publicKey = process.env.REACT_APP_EMAILJS_PUBLIC_KEY || process.env.VITE_EMAILJS_PUBLIC_KEY || "";
+        }
+      } catch (err) {
+        console.warn("process.env check skipped in sendNotificationEmail", err);
+      }
+
+      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_8tlyawq";
+      if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
+      if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
       const docId = docData.id || docData.vphRefNo || "";
       const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docId}`;

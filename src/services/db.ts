@@ -227,7 +227,17 @@ export async function fetchDocuments(year?: number | "all"): Promise<Document[]>
         docs.push({ id: doc.id, ...(doc.data() as any) } as Document);
       });
       return docs;
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.code === "permission-denied" || err?.message?.toLowerCase().includes("permission")) {
+        console.warn("Permission denied for documents collection, smoothly switching to local memory/LocalStorage fallback.");
+        const stored = localStorage.getItem(MOCK_STORAGE_KEY_DOCS);
+        let docsList: Document[] = stored ? JSON.parse(stored) : [];
+        if (year && year !== "all") {
+          const yearStr = String(year);
+          docsList = docsList.filter(d => String(d.academicYear) === yearStr);
+        }
+        return docsList;
+      }
       handleFirestoreError(err, OperationType.LIST, "documents");
       return [];
     }

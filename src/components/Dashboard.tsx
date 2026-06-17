@@ -97,20 +97,25 @@ export default function Dashboard({
           }
 
           const [inboxSnap, outboxSnap1, outboxSnap2] = await Promise.all([
-            getDocs(inboxQuery),
+            getDocs(inboxQuery).catch(() => null),
             getDocs(outboxQuery1).catch(() => null),
             getDocs(outboxQuery2).catch(() => null)
           ]);
 
-          inboxSnap.forEach((d) => {
-            const data = d.data() as any;
-            const docItem = { id: d.id, ...data } as Document;
-            if (docItem.category === DocumentCategory.INBOX || !docItem.category) {
-              inboxList.push(docItem);
-            } else if (docItem.category === DocumentCategory.OUTBOX) {
-              outboxList.push(docItem);
-            }
-          });
+          if (inboxSnap) {
+            inboxSnap.forEach((d) => {
+              const data = d.data() as any;
+              const docItem = { id: d.id, ...data } as Document;
+              if (docItem.category === DocumentCategory.INBOX || !docItem.category) {
+                inboxList.push(docItem);
+              } else if (docItem.category === DocumentCategory.OUTBOX) {
+                outboxList.push(docItem);
+              }
+            });
+          } else {
+            // Throw to fall back to the try-catch local documents filters
+            throw new Error("No permission or failed to fetch documents from Firestore, using offline fallback");
+          }
 
           if (outboxSnap1) {
             outboxSnap1.forEach((d) => {
