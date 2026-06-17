@@ -798,11 +798,12 @@ Email: kittiwat.p@bu.ac.th
         setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 4500);
-      } catch (sendErr) {
+      } catch (sendErr: any) {
         console.error("EmailJS live dispatch error:", sendErr);
-        // แสดงข้อความแนะนำวิธีแก้ไขอย่างชัดเจน แทนที่จะไปเปิด mailto บังคับพาร์ส
+        // แสดงข้อความแนะนำวิธีแก้ไขอย่างละเอียด พร้อมแสดง Error จริงที่ EmailJS ตอบกลับมา
+        const rawError = sendErr?.text || sendErr?.message || JSON.stringify(sendErr) || "ไม่สามารถระบุได้";
         alert(
-          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแต่ระบบตรวจไม่พบ API Key ของ EmailJS ใน Environment (REACT_APP_EMAILJS_PUBLIC_KEY) หรือกรอกค่าที่ไม่ถูกต้อง\n\nกรุณาเพิ่มคีย์ดังกล่าวในไฟล์ .env หรือการตั้งค่า Environment Variables บน Netlify เพื่อส่งอีเมลผ่านระบบโดยตรง"
+          `บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแต่อีเมลส่งไม่สำเร็จเนื่องจากเกิดข้อผิดพลาด (EmailJS Error):\n"${rawError}"\n\n💡 สาเหตุที่เป็นไปได้:\n1. หากคุณเพิ่งแก้ไข Environment Variables (REACT_APP_EMAILJS_PUBLIC_KEY) บน Netlify\n--> คุณต้องกด "Trigger deploy" หรือ "Redeploy" ใน Netlify หลังการตั้งค่าแปรเสร็จ เพื่อให้โค้ด React ทำการคอมไพล์ดักจับคีย์ใหม่เข้าไปในระบบ\n\n2. ค่า Service ID (service_tqngbj8) หรือ Template ID (template_u8r1ewb) ไม่ตรงกับฝั่ง EmailJS ของคุณ`
         );
       }
 
