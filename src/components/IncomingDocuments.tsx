@@ -632,7 +632,7 @@ Email: kittiwat.p@bu.ac.th
     try {
       let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
       let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
-      let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "";
+      let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
       const docId = docData.id || docData.vphRefNo || "";
       const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docId}`;
@@ -783,7 +783,7 @@ Email: kittiwat.p@bu.ac.th
 
       if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
       if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
-      if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "";
+      if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
       // พยายามส่งอีเมลแจ้งผลพิจารณาตรงจากหน้าบ้านทันทีผ่าน SDK เสมอ (ไม่เปิด Mail Client ประจำเครื่อง)
       const mailObject = {
