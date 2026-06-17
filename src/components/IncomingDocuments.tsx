@@ -802,7 +802,7 @@ Email: kittiwat.p@bu.ac.th
         console.error("EmailJS live dispatch error:", sendErr);
         // แสดงข้อความแนะนำวิธีแก้ไขอย่างชัดเจน แทนที่จะไปเปิด mailto บังคับพาร์ส
         alert(
-          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแแต่องระบบตรวจไม่พบ API Key ของ EmailJS ใน Environment (REACT_APP_EMAILJS_PUBLIC_KEY) หรือกรอกคำที่ถูกต้อง\n\nกรุณาตรวจสอบการตั้งค่าคีย์เพื่อส่งผ่านระบบเว็บโดยตรง"
+          "บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแต่ระบบตรวจไม่พบ API Key ของ EmailJS ใน Environment (REACT_APP_EMAILJS_PUBLIC_KEY) หรือกรอกค่าที่ไม่ถูกต้อง\n\nกรุณาเพิ่มคีย์ดังกล่าวในไฟล์ .env หรือการตั้งค่า Environment Variables บน Netlify เพื่อส่งอีเมลผ่านระบบโดยตรง"
         );
       }
 
