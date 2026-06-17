@@ -630,7 +630,7 @@ Email: kittiwat.p@bu.ac.th
   // ฟังก์ชันส่งสัญญานเตือนแจ้งผลพิจารณาทางอีเมลตรงจากหน้าบ้าน React อัตโนมัติ (EmailJS Integration)
   const sendNotificationEmail = async (docData: any, recipientEmail: string) => {
     try {
-      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
+      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_8tlyawq";
       let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
       let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
@@ -781,7 +781,7 @@ Email: kittiwat.p@bu.ac.th
         console.warn("Error checking process.env", err);
       }
 
-      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_tqngbj8";
+      if (!serviceId) serviceId = (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || "service_8tlyawq";
       if (!templateId) templateId = (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || "template_u8r1ewb";
       if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
@@ -803,7 +803,7 @@ Email: kittiwat.p@bu.ac.th
         // แสดงข้อความแนะนำวิธีแก้ไขอย่างละเอียด พร้อมแสดง Error จริงที่ EmailJS ตอบกลับมา
         const rawError = sendErr?.text || sendErr?.message || JSON.stringify(sendErr) || "ไม่สามารถระบุได้";
         alert(
-          `บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแต่อีเมลส่งไม่สำเร็จเนื่องจากเกิดข้อผิดพลาด (EmailJS Error):\n"${rawError}"\n\n💡 สาเหตุที่เป็นไปได้:\n1. หากคุณเพิ่งแก้ไข Environment Variables (REACT_APP_EMAILJS_PUBLIC_KEY) บน Netlify\n--> คุณต้องกด "Trigger deploy" หรือ "Redeploy" ใน Netlify หลังการตั้งค่าแปรเสร็จ เพื่อให้โค้ด React ทำการคอมไพล์ดักจับคีย์ใหม่เข้าไปในระบบ\n\n2. ค่า Service ID (service_tqngbj8) หรือ Template ID (template_u8r1ewb) ไม่ตรงกับฝั่ง EmailJS ของคุณ`
+          `บันทึกประวัติธุรกรรมลงฐานข้อมูลสำเร็จ!\n\nแต่อีเมลส่งไม่สำเร็จเนื่องจากเกิดข้อผิดพลาด (EmailJS Error):\n"${rawError}"\n\n💡 สาเหตุที่เป็นไปได้:\n1. หากคุณเพิ่งแก้ไข Environment Variables (REACT_APP_EMAILJS_PUBLIC_KEY) บน Netlify\n--> คุณต้องกด "Trigger deploy" หรือ "Redeploy" ใน Netlify หลังการตั้งค่าแปรเสร็จ เพื่อให้โค้ด React ทำการคอมไพล์ดักจับคีย์ใหม่เข้าไปในระบบ\n\n2. ค่า Service ID (service_8tlyawq) หรือ Template ID (template_u8r1ewb) ไม่ตรงกับฝั่ง EmailJS ของคุณ`
         );
       }
 
