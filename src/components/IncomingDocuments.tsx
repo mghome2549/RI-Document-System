@@ -627,6 +627,50 @@ Email: kittiwat.p@bu.ac.th
     `;
   };
 
+  // ฟังก์ชันส่งสัญญานเตือนแจ้งผลพิจารณาทางอีเมลตรงจากหน้าบ้าน React อัตโนมัติ (EmailJS Integration)
+  const sendNotificationEmail = async (docData: any, recipientEmail: string) => {
+    try {
+      let serviceId = (import.meta.env.REACT_APP_EMAILJS_SERVICE_ID as string) || (import.meta.env.VITE_EMAILJS_SERVICE_ID as string) || "service_kcajb7t";
+      let templateId = (import.meta.env.REACT_APP_EMAILJS_TEMPLATE_ID as string) || (import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string) || "template_vwp_report";
+      let publicKey = (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || "";
+
+      const docId = docData.id || docData.vphRefNo || "";
+      const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docId}`;
+
+      const templateParams = {
+        recipient_name: docData.senderName || docData.sender || "-",
+        doc_number: docData.docNumber || docData.documentNumber || "-",
+        status: docData.status || "อนุมัติ",
+        recipient_email: recipientEmail || "kittiwat.p@bu.ac.th",
+        subject: docData.subject || docData.title || "-",
+        vph_ref_no: docData.vphRefNo || docId || "",
+        department: docData.department || "-",
+        outgoing_date: docData.outgoingDate || new Date().toLocaleDateString('th-TH'),
+        receiver_name: docData.receiverName || "-",
+        outgoing_dept: docData.outgoingDept || "-",
+        email_body: docData.emailBody || "",
+        html_body: generateHTMLTemplate(docData, docId),
+        // ลิงก์ดาวประเมินอัจฉริยะ (1-5 ดาว) ส่งพ่วงไปใน templateParams
+        star_link_1: `${baseRatingUrl}&score=1`,
+        star_link_2: `${baseRatingUrl}&score=2`,
+        star_link_3: `${baseRatingUrl}&score=3`,
+        star_link_4: `${baseRatingUrl}&score=4`,
+        star_link_5: `${baseRatingUrl}&score=5`
+      };
+
+      if (!publicKey) {
+        throw new Error("EmailJS Public Key is not configured in environment variables.");
+      }
+
+      await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      alert("ระบบส่งอีเมลแจ้งผลเรียบร้อย");
+      return true;
+    } catch (error) {
+      console.error("sendNotificationEmail exception caught:", error);
+      throw error;
+    }
+  };
+
   const sendDirectEmail = async () => {
     setIsSendingEmail(true);
     try {
@@ -731,27 +775,11 @@ Email: kittiwat.p@bu.ac.th
       if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "";
 
       if (publicKey && publicKey.trim() !== "" && publicKey !== "YOUR_EMAILJS_PUBLIC_KEY") {
-        console.log("Dispatching live email with EmailJS:", { serviceId, templateId, publicKey });
-        
-        // Prepare template params including custom generated html_body
-        const templateParams = {
-          vph_ref_no: payload.vphRefNo,
-          doc_number: payload.docNumber,
-          sender_name: payload.senderName,
-          department: payload.department,
-          subject: payload.subject,
-          status: payload.status,
-          outgoing_date: payload.outgoingDate,
-          receiver_name: payload.receiverName,
-          outgoing_dept: payload.outgoingDept,
-          recipient_email: payload.recipientEmail,
-          rating: payload.rating,
-          email_body: previewEmailBody || "",
-          html_body: generateHTMLTemplate(payload, currentDoc.id),
-          base_form_url: "https://docs.google.com/forms/d/e/1FAIpQLScC1-b7U5n-Y8_uE9uX8j-b1S2u3Y4T5G6H7I8J9K0L/viewform?usp=pp_url&entry.11111="
+        const mailObject = {
+          ...payload,
+          id: currentDoc.id
         };
-
-        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+        await sendNotificationEmail(mailObject, payload.recipientEmail);
         
         // Success notification and automatically close modal
         setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");

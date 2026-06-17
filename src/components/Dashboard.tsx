@@ -47,7 +47,7 @@ export default function Dashboard({
             logs.push({ id: d.id, ...d.data() });
           });
         } catch (err) {
-          console.error("Failed to fetch evaluations from cloud, using fallback:", err);
+          console.warn("Failed to fetch evaluations from cloud, smoothly using fallback:", err);
         }
       }
       try {
@@ -63,7 +63,7 @@ export default function Dashboard({
           });
         }
       } catch (err) {
-        console.error("Local storage fallback logs read error:", err);
+        console.warn("Local storage fallback logs read error skipped:", err);
       }
       setDbEvaluations(logs);
     };

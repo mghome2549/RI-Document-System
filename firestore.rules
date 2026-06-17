@@ -27,14 +27,22 @@ service cloud.firestore {
       allow get: if true; // Allow unauthenticated retrieval of a specific rated document for satisfaction feedback surveys
       allow list: if isAdmin();
       allow create, delete: if isAdmin();
-      // Allow administrator updates OR unauthenticated updates of ONLY serviceRating and updatedAt fields
-      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceRating', 'updatedAt']));
+      // Allow administrator updates OR unauthenticated updates of ONLY serviceRating, status, and updatedAt fields
+      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['serviceRating', 'status', 'updatedAt']));
     }
 
     // Document logs collection rules
     match /document_logs/{documentId} {
       allow get: if true;
-      allow create, update: if true; // Allow public to submit rating
+      allow list: if isAdmin();
+      allow create: if true;
+      // Allow unauthenticated updates of ONLY rating_score, evaluated_at, and status fields
+      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating_score', 'evaluated_at', 'status']));
+    }
+
+    // Professors collection rules
+    match /professors/{profId} {
+      allow read, write: if isAdmin();
     }
 
     match /outgoing_documents/{documentId} {
