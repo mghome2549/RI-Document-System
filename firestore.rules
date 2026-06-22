@@ -42,7 +42,8 @@ service cloud.firestore {
 
     // Professors collection rules
     match /professors/{profId} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /outgoing_documents/{documentId} {

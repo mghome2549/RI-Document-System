@@ -122,7 +122,7 @@ export async function fetchProfessors(): Promise<Professor[]> {
         return profList;
       }
     } catch (err) {
-      console.error("Firestore fetch professors failed:", err);
+      console.warn("Firestore fetch professors skipped or failed (falling back smoothly):", err);
     }
   }
 

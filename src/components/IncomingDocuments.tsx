@@ -45,6 +45,11 @@ const isInstitutionalReceiver = (name?: string) => {
 
 const getAppBaseUrl = () => {
   if (typeof window !== "undefined" && window.location && window.location.origin) {
+    // If testing on localhost or private dev servers, fallback to the requested production URLs so users can click email links
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("192.168.") || hostname.includes("dev-env")) {
+      return "https://ridocument.web.app";
+    }
     return window.location.origin;
   }
   return "https://ridocument.web.app";
@@ -114,6 +119,7 @@ export default function IncomingDocuments({
 
   // States for interactive Email Preview popup and Star/Emoji Service Rating feedback system
   const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
+  const [activeDocId, setActiveDocId] = useState("");
   const [previewEmailSubject, setPreviewEmailSubject] = useState("");
   const [previewEmailBody, setPreviewEmailBody] = useState("");
   const [previewRecipient, setPreviewRecipient] = useState("");
@@ -391,6 +397,8 @@ export default function IncomingDocuments({
       note: formVpDetail.trim() || editingDoc?.note || ""
     };
 
+    setActiveDocId(payload.id);
+
     if (editingDoc) {
       payload.riRefNo = editingDoc.riRefNo || editingDoc.vopId;
       payload.runningNumber = editingDoc.runningNumber;
@@ -664,7 +672,7 @@ Email: kittiwat.p@bu.ac.th
         recipient_name: docData.senderName || docData.sender || "-",
         doc_number: docData.docNumber || docData.documentNumber || "-",
         status: docData.status || "อนุมัติ",
-        recipient_email: recipientEmail || "kittiwat.p@bu.ac.th",
+        recipient_email: recipientEmail || docData.recipientEmail || docData.email || "",
         subject: docData.subject || docData.title || "-",
         vph_ref_no: docData.vphRefNo || docId || "",
         department: docData.department || "-",
@@ -673,14 +681,14 @@ Email: kittiwat.p@bu.ac.th
         outgoing_dept: docData.outgoingDept || "-",
         email_body: docData.emailBody || "",
         html_body: generateHTMLTemplate(docData, docId),
-        star_link_1: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=1`,
-        star_link_2: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=2`,
-        star_link_3: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=3`,
-        star_link_4: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=4`,
-        star_link_5: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`,
+        star_link_1: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=1`,
+        star_link_2: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=2`,
+        star_link_3: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=3`,
+        star_link_4: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=4`,
+        star_link_5: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`,
 
         // [ระบบอัปเดตใหม่ตามความต้องการของผู้ใช้และภาพดีไซน์เทมเพลต]
-        to_email: recipientEmail || docData.recipientEmail || docData.email || "kittiwat.p@bu.ac.th",
+        to_email: recipientEmail || docData.recipientEmail || docData.email || "",
         vwp_id: docData.vwpId || docData.vphRefNo || docId || "วพ. 025/2568",
         project_name: docData.subject || docData.title || "-",
         result_status: docData.status || "อนุมัติ",
@@ -690,14 +698,16 @@ Email: kittiwat.p@bu.ac.th
         department_name: docData.department || 'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา',
         doc_id: docData.docId || docData.docNumber || docData.documentNumber || '-',
         project_title: docData.title || docData.subject || "-",
-        completed_date: docData.processedAt || new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
-        forward_to: docData.nextRoute || 'ผอ.คค. (หน่วยงาน: คค.)',
-        rating_link_1: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=1`,
-        rating_link_2: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=2`,
-        rating_link_3: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=3`,
-        rating_link_4: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=4`,
-        rating_link_5: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`,
-        main_rating_button_link: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`
+        completed_date: docData.outgoingDate || docData.processedAt || new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
+        forward_to: docData.receiverName
+          ? `${docData.receiverName}${docData.outgoingDept && docData.outgoingDept !== "-" ? ` (หน่วยงาน: ${docData.outgoingDept})` : ""}`.trim()
+          : (docData.nextRoute || "ผอ.คค. (หน่วยงาน: คค.)"),
+        rating_link_1: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=1`,
+        rating_link_2: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=2`,
+        rating_link_3: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=3`,
+        rating_link_4: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=4`,
+        rating_link_5: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`,
+        main_rating_button_link: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`
       };
 
       if (!publicKey) {
@@ -716,8 +726,8 @@ Email: kittiwat.p@bu.ac.th
   const sendDirectEmail = async () => {
     setIsSendingEmail(true);
     try {
-      // Try to find matching document in live prop if editingDoc is null
-      const matchedDoc = editingDoc || documents.find(d => 
+      // Try to find matching document in live prop using activeDocId first
+      const matchedDoc = editingDoc || (activeDocId ? documents.find(d => d.id === activeDocId) : null) || documents.find(d => 
         (d.docNumber && d.docNumber === docNumber.trim()) || 
         (d.subject && d.subject === formSubject.trim()) || 
         (d.title && d.title === formSubject.trim())
@@ -736,7 +746,7 @@ Email: kittiwat.p@bu.ac.th
         vphRefNo: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.id) || '000/2568',
         vphRef: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.id) || '000/2568',
         vphNo: calculatedVphRef || (editingDoc?.riRefNo) || (editingDoc?.vopId) || '-',
-        id: editingDoc?.id || matchedDoc?.id || '-',
+        id: editingDoc?.id || activeDocId || matchedDoc?.id || '-',
         docNumber: docNumber.trim() || (editingDoc?.docNumber) || '-',
         documentNumber: docNumber.trim() || (editingDoc?.docNumber) || '-',
         senderName: formSender.trim() || (editingDoc?.sender) || '-',
@@ -751,8 +761,8 @@ Email: kittiwat.p@bu.ac.th
         receiverName: formReceiver.trim() || (editingDoc?.receiver) || '-',
         recipientName: formReceiver.trim() || (editingDoc?.receiver) || '-',
         outgoingDept: formOutgoingDepartment.trim() || '-',
-        recipientEmail: previewRecipient || formRecipientEmail.trim() || 'kittiwat.p@bu.ac.th',
-        email: previewRecipient || formRecipientEmail.trim() || 'kittiwat.p@bu.ac.th',
+        recipientEmail: previewRecipient || formRecipientEmail.trim() || '',
+        email: previewRecipient || formRecipientEmail.trim() || '',
         fileName: previewAttachmentName || 'Dr.Panapong Songsukthawan.pdf',
         file: previewAttachmentName || 'Dr.Panapong Songsukthawan.pdf'
       };
@@ -769,7 +779,7 @@ Email: kittiwat.p@bu.ac.th
         outgoingDate: currentDoc.outgoingDate || new Date().toLocaleDateString('th-TH'),
         receiverName: currentDoc.receiverName || currentDoc.recipientName || "-",
         outgoingDept: currentDoc.outgoingDept || "-",
-        recipientEmail: currentDoc.recipientEmail || currentDoc.email || "kittiwat.p@bu.ac.th",
+        recipientEmail: currentDoc.recipientEmail || currentDoc.email || "",
         fileName: currentDoc.fileName || currentDoc.file || "Dr.Panapong Songsukthawan.pdf",
         rating: rating || 5,
         emailBody: previewEmailBody || ""
@@ -1619,7 +1629,6 @@ Email: kittiwat.p@bu.ac.th
                     onSelect={(prof) => {
                       setFormReceiver(prof.name);
                       setFormOutgoingDepartment(prof.department);
-                      setFormRecipientEmail(prof.email);
                     }}
                     professors={professors}
                     placeholder="พิมพ์ชื่ออาจารย์เพื่อเลือกเป็นผู้รับและกรอกข้อมูลอัจฉริยะ..."
@@ -2002,57 +2011,7 @@ Email: kittiwat.p@bu.ac.th
                 )}
               </div>
 
-              {/* 5-Star Emoji Satisfaction Survey Component */}
-              <div className="p-5 border border-amber-200 bg-amber-50/20 rounded-xl space-y-4">
-                <div className="text-center space-y-1">
-                  <h4 className="text-xs font-bold text-amber-900">
-                    📊 แบบประเมินระดับความพึงพอใจการให้บริการ (วพ. Service Rating)
-                  </h4>
-                  <p className="text-[10px] text-slate-500">
-                    กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจการให้บริการในครั้งนี้ (Interactive 5-Level Rating)
-                  </p>
-                </div>
 
-                <div className="flex items-center justify-center gap-2 sm:gap-4 py-2">
-                  {[
-                    { val: 1, label: "ปรับปรุง (1)", emoji: "🤬", text: "ปรับปรุง" },
-                    { val: 2, label: "พอใช้ (2)", emoji: "😟", text: "พอใช้" },
-                    { val: 3, label: "ปานกลาง (3)", emoji: "😐", text: "ปานกลาง" },
-                    { val: 4, label: "ดี (4)", emoji: "😊", text: "ดี" },
-                    { val: 5, label: "ดีเยี่ยม (5)", emoji: "🤩", text: "ดีเยี่ยม" }
-                  ].map((opt) => {
-                    const isSelected = rating >= opt.val;
-                    const isExactlySelected = rating === opt.val;
-                    return (
-                      <button
-                        key={opt.val}
-                        type="button"
-                        onClick={() => setRating(opt.val)}
-                        className={`flex flex-col items-center p-2 rounded-xl border transition-all duration-200 w-16 cursor-pointer ${
-                          isSelected
-                            ? "bg-amber-100 border-amber-400 text-amber-900 scale-105 shadow-xs"
-                            : "bg-white border-slate-200 hover:border-slate-300 text-slate-400 hover:text-slate-600"
-                        }`}
-                        title={opt.label}
-                      >
-                        <span className="text-xl mb-1">{opt.emoji}</span>
-                        <span className={`text-[9px] font-bold ${isSelected ? "text-amber-800" : "text-slate-400"}`}>
-                          {opt.text}
-                        </span>
-                        <span className="text-[10px] text-slate-400 flex justify-center mt-0.5 select-none">
-                          {"⭐".repeat(opt.val)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {rating > 0 && (
-                  <div className="text-center text-[10px] font-bold text-amber-800 animate-fadeIn">
-                    ✓ ขอบพระคุณสำหรับคะแนนความพึงพอใจ: ระดับ {rating} จาก 5 คะแนน
-                  </div>
-                )}
-              </div>
 
             </div>
 

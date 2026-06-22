@@ -23,7 +23,34 @@ import IncomingDocuments from "./components/IncomingDocuments";
 import UserManagement from "./components/UserManagement";
 import { GraduationCap, Bell, Shield, LogOut, CheckCircle, ShieldAlert } from "lucide-react";
 
+// Custom hook mimicking react-router's useSearchParams for compliant /evaluate path parsing
+function useSearchParams() {
+  const [searchParams, setSearchParamsState] = useState(new URLSearchParams(window.location.search));
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setSearchParamsState(new URLSearchParams(window.location.search));
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const setSearchParams = (
+    nextParams: URLSearchParams | ((prev: URLSearchParams) => URLSearchParams)
+  ) => {
+    const next = typeof nextParams === "function" ? nextParams(searchParams) : nextParams;
+    const newSearch = next.toString();
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ""}`;
+    window.history.pushState({}, "", newUrl);
+    setSearchParamsState(next);
+  };
+
+  return [searchParams, setSearchParams] as const;
+}
+
 export default function App() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Navigation & session state
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
@@ -70,15 +97,14 @@ export default function App() {
 
   // 2. Intercept URL public evaluation and rating actions
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
     const pathname = window.location.pathname;
     
-    const isEvaluate = pathname.endsWith("/evaluate") || pathname.includes("/evaluate") || params.get("action") === "rate";
+    const isEvaluate = pathname.endsWith("/evaluate") || pathname.includes("/evaluate") || searchParams.get("action") === "rate";
     
     if (isEvaluate) {
       setIsEvaluatingPage(true);
-      const docId = params.get("docId");
-      const scoreParam = params.get("score") || params.get("rating");
+      const docId = searchParams.get("docId");
+      const scoreParam = searchParams.get("score") || searchParams.get("rating");
       
       if (!docId || !scoreParam) {
         setRatingError("ลิงก์ประเมินผลไม่ถูกต้อง");
@@ -94,7 +120,7 @@ export default function App() {
       setRatingDocId(docId);
       setRatingValueToSubmit(val);
     }
-  }, []);
+  }, [searchParams]);
 
   // 3. Fetch document details for public rating
   useEffect(() => {
