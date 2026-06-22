@@ -43,6 +43,13 @@ const isInstitutionalReceiver = (name?: string) => {
   );
 };
 
+const getAppBaseUrl = () => {
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return window.location.origin;
+  }
+  return "https://ridocument.web.app";
+};
+
 export default function IncomingDocuments({
   documents,
   onAddDoc,
@@ -410,16 +417,17 @@ export default function IncomingDocuments({
 
       // Compile exact revised formal Thai template (using the intelligent direct-rating redirect URL to our own system)
       const docRefId = payload.id || "";
+      const baseUrl = getAppBaseUrl();
       const ratingLinks = `
 --------------------------------------------------
 📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
 โปรดคลิกลิงก์เลือกระดับดาวเพื่อบันทึกคะแนนประเมินความพึงพอใจของท่านลงในระบบโดยตรง:
 
-🤬 ปรับปรุง (1 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=1
-😟 พอใช้ (2 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=2
-😐 ปานกลาง (3 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=3
-😊 ดี (4 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=4
-🤩 ดีเยี่ยม (5 ดาว): https://ridocument.netlify.app/evaluate?docId=${docRefId}&score=5
+🤬 ปรับปรุง (1 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=1
+😟 พอใช้ (2 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=2
+😐 ปานกลาง (3 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=3
+😊 ดี (4 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=4
+🤩 ดีเยี่ยม (5 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=5
 --------------------------------------------------`;
 
       const emailBody = `เรียน ${docSender} (${docDept})
@@ -504,7 +512,7 @@ Email: kittiwat.p@bu.ac.th
   // Helper function to generate elegant HTML email with embedded star/smiley ratings pointing back to our App
   const generateHTMLTemplate = (payload: any, docId: string) => {
     const docRefId = docId || "";
-    const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docRefId}`;
+    const baseRatingUrl = `${getAppBaseUrl()}/evaluate?docId=${docRefId}`;
 
     return `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f6f8fa; padding: 24px; margin: 0; width: 100%; box-sizing: border-box; -webkit-font-smoothing: antialiased;">
@@ -649,7 +657,7 @@ Email: kittiwat.p@bu.ac.th
       if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
       const docId = docData.id || docData.vphRefNo || "";
-      const baseRatingUrl = `https://ridocument.netlify.app/evaluate?docId=${docId}`;
+      const baseRatingUrl = `${getAppBaseUrl()}/evaluate?docId=${docId}`;
 
       const templateParams = {
         // [ระบบดั้งเดิม / Fallbacks]
@@ -665,22 +673,31 @@ Email: kittiwat.p@bu.ac.th
         outgoing_dept: docData.outgoingDept || "-",
         email_body: docData.emailBody || "",
         html_body: generateHTMLTemplate(docData, docId),
-        star_link_1: `${baseRatingUrl}&score=1`,
-        star_link_2: `${baseRatingUrl}&score=2`,
-        star_link_3: `${baseRatingUrl}&score=3`,
-        star_link_4: `${baseRatingUrl}&score=4`,
-        star_link_5: `${baseRatingUrl}&score=5`,
+        star_link_1: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=1`,
+        star_link_2: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=2`,
+        star_link_3: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=3`,
+        star_link_4: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=4`,
+        star_link_5: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`,
 
         // [ระบบอัปเดตใหม่ตามความต้องการของผู้ใช้และภาพดีไซน์เทมเพลต]
         to_email: recipientEmail || docData.recipientEmail || docData.email || "kittiwat.p@bu.ac.th",
-        vwp_id: docData.vphRefNo || docData.vwpId || docId || "",
+        vwp_id: docData.vwpId || docData.vphRefNo || docId || "วพ. 025/2568",
         project_name: docData.subject || docData.title || "-",
         result_status: docData.status || "อนุมัติ",
-        rating_link_1: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=1`,
-        rating_link_2: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=2`,
-        rating_link_3: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=3`,
-        rating_link_4: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=4`,
-        rating_link_5: `https://ridocument.netlify.app/evaluate?docId=${docId}&score=5`
+
+        // [พารามิเตอร์เทมเพลตและลิงก์ประเมินผลระดับดวงดาวแบบ Dynamic Origin]
+        professor_name: docData.professorName || docData.senderName || docData.sender || "-",
+        department_name: docData.department || 'สายงานวิจัยและพัฒนานวัตกรรมการศึกษา',
+        doc_id: docData.docId || docData.docNumber || docData.documentNumber || '-',
+        project_title: docData.title || docData.subject || "-",
+        completed_date: docData.processedAt || new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
+        forward_to: docData.nextRoute || 'ผอ.คค. (หน่วยงาน: คค.)',
+        rating_link_1: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=1`,
+        rating_link_2: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=2`,
+        rating_link_3: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=3`,
+        rating_link_4: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=4`,
+        rating_link_5: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`,
+        main_rating_button_link: `${window.location.origin}/evaluate?docId=${docData.vwpId || docData.vphRefNo || docId}&score=5`
       };
 
       if (!publicKey) {
