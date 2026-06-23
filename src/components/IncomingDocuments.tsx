@@ -661,7 +661,7 @@ Email: kittiwat.p@bu.ac.th
   };
 
   // ฟังก์ชันส่งสัญญานเตือนแจ้งผลพิจารณาทางอีเมลตรงจากหน้าบ้าน React อัตโนมัติ (EmailJS Integration)
-  const sendNotificationEmail = async (docData: any, recipientEmail: string) => {
+  const sendNotificationEmail = async (docData: any, recipientEmail: string, fileBase64?: string) => {
     try {
       let serviceId = "";
       let templateId = "";
@@ -684,7 +684,7 @@ Email: kittiwat.p@bu.ac.th
       const docId = docData.id || docData.vphRefNo || "";
       const baseRatingUrl = `${getBaseUrl()}/evaluate?docId=${docId}`;
 
-      const templateParams = {
+      const templateParams: any = {
         // [ระบบดั้งเดิม / Fallbacks]
         recipient_name: docData.senderName || docData.sender || "-",
         doc_number: docData.docNumber || docData.documentNumber || "-",
@@ -727,13 +727,62 @@ Email: kittiwat.p@bu.ac.th
         main_rating_button_link: `${getBaseUrl()}/evaluate?docId=${docId}&score=5`
       };
 
+      if (fileBase64) {
+        // เพิ่มไฟล์สำหรับ dynamic parameters ของ EmailJS ในทุกคีย์วารดที่อาจเป็นไปได้ในเทมเพลตฝั่งผู้ใช้
+        templateParams.content = fileBase64;
+        templateParams.attachment = fileBase64;
+        templateParams.file = fileBase64;
+        templateParams.pdf = fileBase64;
+        templateParams.pdf_attachment = fileBase64;
+        templateParams.scanned_pdf = fileBase64;
+        templateParams.form_attachment = fileBase64;
+      }
+
       if (!publicKey) {
         throw new Error("EmailJS Public Key is not configured in environment variables.");
       }
 
-      await emailjs.send(serviceId, templateId, templateParams, publicKey);
-      alert("ระบบส่งอีเมลแจ้งผลเรียบร้อย");
-      return true;
+      try {
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+        alert("ระบบส่งอีเมลแจ้งผลเรียบร้อย");
+        return true;
+      } catch (sendErr: any) {
+        // ไคลเอนต์ฟรี มีขีดจำกัดไฟล์แนบสูงสุด 50KB -> หากส่งมีไฟล์แนบเกิน 50KB หรือเกิด Error อื่น
+        const isAttachmentSizeError = fileBase64 && (
+          fileBase64.length > 70000 || // ประมาณ 50KB หลังเข้ารหัส base64
+          sendErr?.text?.toLowerCase().includes("size") ||
+          sendErr?.message?.toLowerCase().includes("size") ||
+          sendErr?.text?.toLowerCase().includes("limit") ||
+          sendErr?.message?.toLowerCase().includes("limit") ||
+          sendErr?.text?.toLowerCase().includes("large") ||
+          sendErr?.message?.toLowerCase().includes("large") ||
+          sendErr?.status === 400 ||
+          sendErr?.status === 413
+        );
+
+        if (isAttachmentSizeError) {
+          console.warn("Detected EmailJS size restriction. Retrying auto-fallback without attachment...");
+          
+          // ล้างพารามิเตอร์ส่วนที่เกินจำกัด
+          const fallbackParams = { ...templateParams };
+          delete fallbackParams.content;
+          delete fallbackParams.attachment;
+          delete fallbackParams.file;
+          delete fallbackParams.pdf;
+          delete fallbackParams.pdf_attachment;
+          delete fallbackParams.scanned_pdf;
+          delete fallbackParams.form_attachment;
+          
+          // แนบโน้ตอัตโนมัติแจ้งผู้รับ
+          fallbackParams.email_body = (fallbackParams.email_body || "") + "\n\n(⚠️ หมายเหตุจากระบบบริการ: เนื่องจากไฟล์สแกน PDF ที่แนบมีขนาดเกินกว่าขีดจำกัด 50KB ของผู้ใช้บริการฟรีอีเมลดั้งเดิม ระบบจึงนำไฟล์ PDF ออกเพื่อให้จัดส่งเนื้อหาแจ้งผลและหัวข้อลิงก์ประเมินความพึงพอใจ 5 ดาวได้สำเร็จ ท่านสามารถเข้าเช็คดาวน์โหลดไฟล์ฉบับเต็มตรงได้ในระบบฐานข้อมูล)";
+          
+          await emailjs.send(serviceId, templateId, fallbackParams, publicKey);
+          alert("ส่งอีเมลแจ้งผลสำเร็จแล้ว!\n(⚠️ หมายเหตุ: สลับจัดส่งอีเมลแบบไม่มีไฟล์แนบแทน เนื่องจากไฟล์สแกน PDF มีขนาดสูงเกินจำกัด 50KB ของอีเมลบริการฟรีดั้งเดิม ระบบจึงนำออกเพื่อให้จัดส่งอีเมลแจ้งผลและลิงก์ประเมินความพึงพอใจได้สำเร็จอย่างสมบูรณ์)");
+          return true;
+        } else {
+          throw sendErr;
+        }
+      }
     } catch (error) {
       console.error("sendNotificationEmail exception caught:", error);
       throw error;
@@ -824,6 +873,25 @@ Email: kittiwat.p@bu.ac.th
         console.warn("Supabase document log failed to write", logErr);
       }
 
+      // Convert attached PDF file to base64 if it is present in memory
+      let fileBase64 = "";
+      if (formPdfFile) {
+        try {
+          const toBase64Helper = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(file);
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = (err) => reject(err);
+            });
+          };
+          fileBase64 = await toBase64Helper(formPdfFile);
+          console.log("Converted formPdfFile successfully to base64, total characters:", fileBase64.length);
+        } catch (convErr) {
+          console.error("Failed to convert formPdfFile to base64 in sendDirectEmail:", convErr);
+        }
+      }
+
       // Fetch configurations from process.env and fallback to import.meta.env (avoiding hardcoding)
       let serviceId = "";
       let templateId = "";
@@ -850,7 +918,7 @@ Email: kittiwat.p@bu.ac.th
       };
 
       try {
-        await sendNotificationEmail(mailObject, payload.recipientEmail);
+        await sendNotificationEmail(mailObject, payload.recipientEmail, fileBase64);
         
         // Success notification and automatically close modal
         setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");
@@ -1713,6 +1781,9 @@ Email: kittiwat.p@bu.ac.th
                         📄 ไฟล์เดิม: {editingDoc.pdfAttachmentName}
                       </span>
                     )}
+                    <span className="text-[9px] text-slate-400 block mt-1 leading-normal font-sans">
+                      💡 คำแนะนำ: แผนบริการ EmailJS ฟรีจำกัดขนาดไฟล์แนบไม่เกิน 50 KB (หากไฟล์ประเมินมีขนาดเด่นชัด ระบบอัปโหลดจะส่งอีเมลแจ้งผลแบบละเว้นไฟล์แนบให้อัตโนมัติ เพื่อเลี่ยงการถูกปฏิเสธความปลอดภัย โดยผู้รับยังคงเปิดดูและทำงานแบบประเมินได้ปกติผ่านฐานข้อมูลระบบ)
+                    </span>
                   </div>
                 </div>
               </div>
