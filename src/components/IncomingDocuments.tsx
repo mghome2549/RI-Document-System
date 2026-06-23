@@ -43,16 +43,28 @@ const isInstitutionalReceiver = (name?: string) => {
   );
 };
 
-const getAppBaseUrl = () => {
-  if (typeof window !== "undefined" && window.location && window.location.origin) {
-    // If testing on localhost or private dev servers, fallback to the requested production URLs so users can click email links
-    const hostname = window.location.hostname;
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("192.168.") || hostname.includes("dev-env")) {
-      return "https://ridocument.web.app";
-    }
-    return window.location.origin;
+const PRODUCTION_URL = (import.meta.env.VITE_PRODUCTION_URL as string) || "https://gen-lang-client-0377022373.web.app";
+
+const getBaseUrl = () => {
+  if (typeof window === "undefined" || !window.location || !window.location.origin) {
+    return PRODUCTION_URL;
   }
-  return "https://ridocument.web.app";
+  const origin = window.location.origin;
+  const hostname = window.location.hostname;
+  
+  // ตรวจจับทุกกรณีที่เป็นการทดสอบ/จำลอง รวมถึงโดเมน AI Studio, Run.app, localhost, และสภาวะจำลองต่างๆ
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.includes("192.168.") ||
+    hostname.includes("dev-env") ||
+    hostname.includes("aistudio") ||
+    hostname.includes("google") ||
+    hostname.includes("run.app") // ป้องกันลิงก์ 404 จากสภาวะแวดล้อมจำลองของ AI Studio ที่ใช้ *.run.app
+  ) {
+    return PRODUCTION_URL;
+  }
+  return origin;
 };
 
 export default function IncomingDocuments({
@@ -425,7 +437,7 @@ export default function IncomingDocuments({
 
       // Compile exact revised formal Thai template (using the intelligent direct-rating redirect URL to our own system)
       const docRefId = payload.id || "";
-      const baseUrl = getAppBaseUrl();
+      const baseUrl = getBaseUrl();
       const ratingLinks = `
 --------------------------------------------------
 📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
@@ -520,7 +532,7 @@ Email: kittiwat.p@bu.ac.th
   // Helper function to generate elegant HTML email with embedded star/smiley ratings pointing back to our App
   const generateHTMLTemplate = (payload: any, docId: string) => {
     const docRefId = docId || "";
-    const baseRatingUrl = `${getAppBaseUrl()}/evaluate?docId=${docRefId}`;
+    const baseRatingUrl = `${getBaseUrl()}/evaluate?docId=${docRefId}`;
 
     return `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f6f8fa; padding: 24px; margin: 0; width: 100%; box-sizing: border-box; -webkit-font-smoothing: antialiased;">
@@ -665,7 +677,7 @@ Email: kittiwat.p@bu.ac.th
       if (!publicKey) publicKey = (import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string) || (import.meta.env.REACT_APP_EMAILJS_PUBLIC_KEY as string) || "uo_UITzIKYV4MQLNy";
 
       const docId = docData.id || docData.vphRefNo || "";
-      const baseRatingUrl = `${getAppBaseUrl()}/evaluate?docId=${docId}`;
+      const baseRatingUrl = `${getBaseUrl()}/evaluate?docId=${docId}`;
 
       const templateParams = {
         // [ระบบดั้งเดิม / Fallbacks]
@@ -681,11 +693,11 @@ Email: kittiwat.p@bu.ac.th
         outgoing_dept: docData.outgoingDept || "-",
         email_body: docData.emailBody || "",
         html_body: generateHTMLTemplate(docData, docId),
-        star_link_1: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=1`,
-        star_link_2: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=2`,
-        star_link_3: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=3`,
-        star_link_4: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=4`,
-        star_link_5: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`,
+        star_link_1: `${getBaseUrl()}/evaluate?docId=${docId}&score=1`,
+        star_link_2: `${getBaseUrl()}/evaluate?docId=${docId}&score=2`,
+        star_link_3: `${getBaseUrl()}/evaluate?docId=${docId}&score=3`,
+        star_link_4: `${getBaseUrl()}/evaluate?docId=${docId}&score=4`,
+        star_link_5: `${getBaseUrl()}/evaluate?docId=${docId}&score=5`,
 
         // [ระบบอัปเดตใหม่ตามความต้องการของผู้ใช้และภาพดีไซน์เทมเพลต]
         to_email: recipientEmail || docData.recipientEmail || docData.email || "",
@@ -702,12 +714,12 @@ Email: kittiwat.p@bu.ac.th
         forward_to: docData.receiverName
           ? `${docData.receiverName}${docData.outgoingDept && docData.outgoingDept !== "-" ? ` (หน่วยงาน: ${docData.outgoingDept})` : ""}`.trim()
           : (docData.nextRoute || "ผอ.คค. (หน่วยงาน: คค.)"),
-        rating_link_1: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=1`,
-        rating_link_2: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=2`,
-        rating_link_3: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=3`,
-        rating_link_4: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=4`,
-        rating_link_5: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`,
-        main_rating_button_link: `${getAppBaseUrl()}/evaluate?docId=${docId}&score=5`
+        rating_link_1: `${getBaseUrl()}/evaluate?docId=${docId}&score=1`,
+        rating_link_2: `${getBaseUrl()}/evaluate?docId=${docId}&score=2`,
+        rating_link_3: `${getBaseUrl()}/evaluate?docId=${docId}&score=3`,
+        rating_link_4: `${getBaseUrl()}/evaluate?docId=${docId}&score=4`,
+        rating_link_5: `${getBaseUrl()}/evaluate?docId=${docId}&score=5`,
+        main_rating_button_link: `${getBaseUrl()}/evaluate?docId=${docId}&score=5`
       };
 
       if (!publicKey) {
