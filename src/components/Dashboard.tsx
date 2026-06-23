@@ -87,9 +87,9 @@ export default function Dashboard({
           let outboxQuery2;
 
           if (selectedYrNum !== null) {
-            inboxQuery = query(collection(db, "documents"), where("academicYear", "==", selectedYrNum));
-            outboxQuery1 = query(collection(db, "outgoing_documents"), where("academicYear", "==", selectedYrNum));
-            outboxQuery2 = query(collection(db, "outgoingDocuments"), where("academicYear", "==", selectedYrNum));
+            inboxQuery = query(collection(db, "documents"), where("academicYear", "in", [selectedYrNum, String(selectedYrNum)]));
+            outboxQuery1 = query(collection(db, "outgoing_documents"), where("academicYear", "in", [selectedYrNum, String(selectedYrNum)]));
+            outboxQuery2 = query(collection(db, "outgoingDocuments"), where("academicYear", "in", [selectedYrNum, String(selectedYrNum)]));
           } else {
             inboxQuery = collection(db, "documents");
             outboxQuery1 = collection(db, "outgoing_documents");
@@ -391,10 +391,10 @@ export default function Dashboard({
     }
   };
 
-  // Filter documents based on year selection
+  // Filter documents based on year selection (robust to both string and number formats)
   const filteredDocs = selectedYear === "all" 
     ? documents 
-    : documents.filter(d => d.academicYear === selectedYear);
+    : documents.filter(d => String(d.academicYear) === String(selectedYear));
 
   const total = filteredDocs.length;
 
@@ -402,28 +402,33 @@ export default function Dashboard({
   const outboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.OUTBOX);
 
   // Combine unique evaluations by document ID to make calculation perfectly real-time
-  const evaluatedDocsList = filteredDocs.filter((d) => typeof d.serviceRating === "number" && d.serviceRating > 0);
+  // Convert serviceRating to number to handle any potential string-stored scores robustly
+  const evaluatedDocsList = filteredDocs.filter((d) => {
+    const r = Number(d.serviceRating);
+    return !isNaN(r) && r > 0;
+  });
   const combinedEvaluationsMap = new Map<string, number>();
 
   // Add ratings from visible documents (for the current academicYear if filtered)
   evaluatedDocsList.forEach(d => {
     if (d.id && d.serviceRating) {
-      combinedEvaluationsMap.set(d.id, d.serviceRating);
+      combinedEvaluationsMap.set(d.id, Number(d.serviceRating));
     }
   });
 
   // Blend in evaluations from Firestore document_logs collection and fallbacks
   dbEvaluations.forEach(log => {
-    // If we have rating_score in the log
-    if (log.id && typeof log.rating_score === "number" && log.rating_score > 0) {
+    // Treat rating_score or rating field as standard rating (supporting both string and number)
+    const scoreVal = Number(log.rating_score || log.rating);
+    if (log.id && !isNaN(scoreVal) && scoreVal > 0) {
       if (selectedYear !== "all") {
-        // Only count if document is for the currently selected academic year
-        const matchesYear = documents.some(d => d.id === log.id && d.academicYear === selectedYear);
+        // Only count if document is for the currently selected academic year (string safe matching)
+        const matchesYear = documents.some(d => d.id === log.id && String(d.academicYear) === String(selectedYear));
         if (matchesYear) {
-          combinedEvaluationsMap.set(log.id, log.rating_score);
+          combinedEvaluationsMap.set(log.id, scoreVal);
         }
       } else {
-        combinedEvaluationsMap.set(log.id, log.rating_score);
+        combinedEvaluationsMap.set(log.id, scoreVal);
       }
     }
   });
@@ -436,7 +441,8 @@ export default function Dashboard({
 
   const evaluationDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   uniqueEvaluations.forEach((item) => {
-    const scoreVal = item.score as 1 | 2 | 3 | 4 | 5;
+    // Round to nearest integer to safely group any floating scores into correct star slots
+    const scoreVal = Math.round(item.score) as 1 | 2 | 3 | 4 | 5;
     if (evaluationDistribution[scoreVal] !== undefined) {
       evaluationDistribution[scoreVal]++;
     }
@@ -812,23 +818,6 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* KPI 6: คะแนนความพึงพอใจเฉลี่ย และ จำนวนผู้ตอบแบบประเมิน */}
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-100 border border-amber-200 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
-          <div className="flex items-start justify-between w-full">
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] font-extrabold text-amber-600 uppercase tracking-widest block truncate overflow-hidden">ความพึงพอใจเฉลี่ย</span>
-              <span className="text-lg md:text-xl font-bold font-mono text-amber-950 mt-1 block">
-                ⭐ {averageEvaluationScore} <span className="text-[10px] font-bold text-amber-800/60 font-sans">/ 5.00</span>
-              </span>
-            </div>
-            <span className="p-1.5 bg-amber-100/80 text-[#D4AF37] border border-amber-200 rounded-xl shrink-0 ml-1.5 shadow-sm font-extrabold">
-              ★
-            </span>
-          </div>
-          <div className="mt-4 pt-1.5 border-t border-amber-200/50 text-[10px] font-extrabold text-amber-800/80 truncate">
-            ผู้ตอบแบบประเมิน: {totalEvaluationsCount} คน
-          </div>
-        </div>
       </div>
 
       {/* Charts Section: ประเภทเอกสาร, สถิติตามหน่วยงาน, และ ความพึงพอใจการบริการ */}

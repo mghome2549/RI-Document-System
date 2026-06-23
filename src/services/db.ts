@@ -217,7 +217,7 @@ export async function fetchDocuments(year?: number | "all"): Promise<Document[]>
       let q;
       if (year && year !== "all") {
         const numericYear = typeof year === "string" ? parseInt(year) : year;
-        q = query(collection(db, "documents"), where("academicYear", "==", numericYear));
+        q = query(collection(db, "documents"), where("academicYear", "in", [numericYear, String(numericYear)]));
       } else {
         q = collection(db, "documents");
       }
@@ -461,7 +461,7 @@ export async function saveNewInboxDocumentWithTransaction(document: Document): P
             let count = 0;
             queryDocs.forEach((d) => {
               const data = d.data() as Document;
-              if (data.category === DocumentCategory.INBOX && data.academicYear === selectedYear) {
+              if (data.category === DocumentCategory.INBOX && String(data.academicYear) === String(selectedYear)) {
                 count++;
               }
             });
@@ -600,7 +600,7 @@ export async function saveOutgoingDocumentWithTransaction(outgoingDoc: Document)
                 let count = 0;
                 queryDocs.forEach((d) => {
                   const data = d.data() as Document;
-                  if (data.category === DocumentCategory.OUTBOX && data.academicYear === selectedYear) {
+                  if (data.category === DocumentCategory.OUTBOX && String(data.academicYear) === String(selectedYear)) {
                     count++;
                   }
                 });

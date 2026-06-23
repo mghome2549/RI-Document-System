@@ -414,6 +414,9 @@ export default function IncomingDocuments({
     if (editingDoc) {
       payload.riRefNo = editingDoc.riRefNo || editingDoc.vopId;
       payload.runningNumber = editingDoc.runningNumber;
+      if (typeof editingDoc.serviceRating === "number") {
+        payload.serviceRating = editingDoc.serviceRating;
+      }
       onEditDoc(payload);
     } else {
       onAddDoc(payload);
