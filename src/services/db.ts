@@ -254,8 +254,7 @@ export async function fetchDocuments(year?: number | "all"): Promise<Document[]>
       return doc;
     });
     if (year && year !== "all") {
-      const numericYear = typeof year === "string" ? parseInt(year) : year;
-      return docsList.filter((d) => d.academicYear === numericYear);
+      return docsList.filter((d) => String(d.academicYear) === String(year));
     }
     return docsList;
   }

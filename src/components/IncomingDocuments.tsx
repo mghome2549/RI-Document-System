@@ -78,8 +78,10 @@ export default function IncomingDocuments({
 }: IncomingDocumentsProps) {
   const isAdmin = userRole === "admin";
 
-  // Filter only Inbox-based documents as base records for ledger entries
-  const baseDocs = documents.filter((d) => d.category === DocumentCategory.INBOX || !d.category);
+  // Filter only Inbox-based documents as base records for ledger entries and ensure year filtering is string-safe
+  const baseDocs = documents
+    .filter((d) => d.category === DocumentCategory.INBOX || !d.category)
+    .filter((d) => selectedFilterYear === "all" || String(d.academicYear) === String(selectedFilterYear));
 
   // States
   const [searchTerm, setSearchTerm] = useState("");
@@ -149,7 +151,7 @@ export default function IncomingDocuments({
   // States of Refactoring (Enterprise Performance Pagination, Quick-Filters & Reset Trigger)
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"all" | "pending_vp" | "pending_outgoing">("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(50);
 
   // Reset pagination state when filters change to avoid empty-state ghosts
   useEffect(() => {
@@ -1014,7 +1016,7 @@ Email: kittiwat.p@bu.ac.th
   // Filter list with local search and status filters
   const filteredList = mergedLedgerList.filter(({ doc: item, mergedOut }) => {
     // Academic year filter
-    if (selectedFilterYear !== "all" && item.academicYear !== selectedFilterYear) {
+    if (selectedFilterYear !== "all" && String(item.academicYear) !== String(selectedFilterYear)) {
       return false;
     }
 
@@ -1142,7 +1144,7 @@ Email: kittiwat.p@bu.ac.th
         >
           📥 งานค้าง รอง วพ. ({
             mergedLedgerList.filter(({ doc: item }) => {
-              if (selectedFilterYear !== "all" && item.academicYear !== selectedFilterYear) return false;
+              if (selectedFilterYear !== "all" && String(item.academicYear) !== String(selectedFilterYear)) return false;
               const currentStatus = item.vpRouting?.status || item.status || "อยู่ระหว่างพิจารณา";
               return currentStatus === "อยู่ระหว่างพิจารณา";
             }).length
@@ -1162,7 +1164,7 @@ Email: kittiwat.p@bu.ac.th
         >
           📤 รอส่งออกปลายทาง ({
             mergedLedgerList.filter(({ doc: item, mergedOut }) => {
-              if (selectedFilterYear !== "all" && item.academicYear !== selectedFilterYear) return false;
+              if (selectedFilterYear !== "all" && String(item.academicYear) !== String(selectedFilterYear)) return false;
               const currentStatus = item.vpRouting?.status || item.status || "อยู่ระหว่างพิจารณา";
               const isApprovedOrSigned = currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
               const hasNoOutgoingInfo = !mergedOut.sendDate && !mergedOut.receiver;

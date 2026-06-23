@@ -398,7 +398,7 @@ export default function Dashboard({
 
   const total = filteredDocs.length;
 
-  const inboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.INBOX);
+  const inboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.INBOX || !d.category);
   const outboxDocs = filteredDocs.filter(d => d.category === DocumentCategory.OUTBOX);
 
   // Combine unique evaluations by document ID to make calculation perfectly real-time
@@ -470,7 +470,7 @@ export default function Dashboard({
 
   // Helper to check if a document is completed
   const isDocCompleted = (doc: Document) => {
-    if (doc.category === DocumentCategory.INBOX) {
+    if (doc.category === DocumentCategory.INBOX || !doc.category) {
       return doc.status !== "อยู่ระหว่างพิจารณา";
     }
     return doc.status === "ดำเนินการแล้ว/ส่งออกแล้ว" || doc.status === DocumentStatus.COMPLETED;
