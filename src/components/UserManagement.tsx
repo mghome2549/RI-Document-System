@@ -15,7 +15,9 @@ import {
   Check,
   Copy,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Download,
+  Upload
 } from "lucide-react";
 import {
   Professor,
@@ -330,6 +332,162 @@ export default function UserManagement({
     };
 
     reader.readAsText(file, "UTF-8");
+  };
+
+  // JSON Import handler
+  const handleJsonImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProfLoading(true);
+    setSuccess(null);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) throw new Error("ไฟล์ว่างเปล่า");
+
+        const parsed = JSON.parse(text);
+        const records = Array.isArray(parsed) ? parsed : (parsed.professors || []);
+
+        if (records.length === 0) {
+          throw new Error("ไม่พบรายชื่อในอาร์เรย์ JSON");
+        }
+
+        const parsedRecords: Omit<Professor, "id">[] = [];
+        for (const item of records) {
+          const name = item.name || item["ชื่อ-นามสกุล"] || "";
+          const personalId = item.personalId || item.employee_id || item["รหัสบุคลากร"] || "";
+          const position = item.position || item["ตำแหน่ง"] || item["ตำแหน่งวิชาการ"] || "";
+          const department = item.department || item["หน่วยงาน"] || item["สังกัด"] || item["สังกัด / สำนักงาน"] || "";
+          const email = item.email || item["อีเมล"] || item["อีเมล์"] || "";
+          const phone = item.phone || item["โทรศัพท์"] || item["เบอร์โทรศัพท์"] || "";
+
+          if (name && department && email) {
+            parsedRecords.push({
+              name,
+              personalId,
+              position,
+              department,
+              email,
+              phone
+            });
+          }
+        }
+
+        if (parsedRecords.length === 0) {
+          throw new Error("ข้อมูลใน JSON ไม่มีคุณสมบัติที่ถูกต้อง (ต้องการ ชื่อ, สังกัด, และ อีเมล เป็นอย่างน้อย)");
+        }
+
+        const { upsertedCount, insertedCount } = await importProfessorsCsv(parsedRecords);
+        setSuccess(`นำเข้าข้อมูลจากไฟล์ JSON สำเร็จแล้ว! (เพิ่มรายใหม่ ${insertedCount} ท่าน และอัปเดตข้อมูลเดิม ${upsertedCount} ท่าน) ระบบป้องกันข้อมูลซ้ำซ้อนเรียบร้อยแล้วครับ`);
+        setTimeout(() => setSuccess(null), 6500);
+        loadProfs();
+      } catch (err: any) {
+        setError(`วิเคราะห์ไฟล์ JSON ผิดพลาด: ${err.message || err}`);
+      } finally {
+        setIsProfLoading(false);
+        e.target.value = "";
+      }
+    };
+
+    reader.onerror = () => {
+      setError("เกิดความล้มเหลวในการอ่านไฟล์นำเข้า");
+      setIsProfLoading(false);
+    };
+
+    reader.readAsText(file, "UTF-8");
+  };
+
+  // CSV Export handler
+  const handleExportCsv = () => {
+    try {
+      if (professors.length === 0) {
+        setError("ไม่มีข้อมูลรายชื่ออาจารย์ในฐานข้อมูลที่จะส่งออก");
+        return;
+      }
+
+      const headers = ["ชื่อ-นามสกุล", "รหัสบุคลากร", "ตำแหน่งวิชาการ", "สังกัด / สำนักงาน", "อีเมล", "เบอร์โทรศัพท์"];
+      const rows = professors.map((p) => [
+        `"${(p.name || "").replace(/"/g, '""')}"`,
+        `"${(p.personalId || "").replace(/"/g, '""')}"`,
+        `"${(p.position || "").replace(/"/g, '""')}"`,
+        `"${(p.department || "").replace(/"/g, '""')}"`,
+        `"${(p.email || "").replace(/"/g, '""')}"`,
+        `"${(p.phone || "").replace(/"/g, '""')}"`
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `professors_export_${new Date().toISOString().split("T")[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess("ส่งออกไฟล์ CSV สำเร็จเรียบร้อยแล้ว!");
+      setTimeout(() => setSuccess(null), 3500);
+    } catch (err: any) {
+      setError(`เกิดข้อผิดพลาดในการส่งออกไฟล์ CSV: ${err.message || err}`);
+    }
+  };
+
+  // JSON Export handler
+  const handleExportJson = () => {
+    try {
+      if (professors.length === 0) {
+        setError("ไม่มีข้อมูลรายชื่ออาจารย์ในฐานข้อมูลที่จะส่งออก");
+        return;
+      }
+
+      const jsonString = JSON.stringify(professors, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `professors_export_${new Date().toISOString().split("T")[0]}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess("ส่งออกไฟล์ JSON สำเร็จเรียบร้อยแล้ว!");
+      setTimeout(() => setSuccess(null), 3500);
+    } catch (err: any) {
+      setError(`เกิดข้อผิดพลาดในการส่งออกไฟล์ JSON: ${err.message || err}`);
+    }
+  };
+
+  // Download Template handler
+  const handleDownloadTemplate = () => {
+    try {
+      const headers = ["ชื่อ-นามสกุล", "รหัสบุคลากร", "ตำแหน่งวิชาการ", "สังกัด / สำนักงาน", "อีเมล", "เบอร์โทรศัพท์"];
+      const exampleRow = [
+        "\"ดร.สมชาย ใจดี\"",
+        "\"10203099\"",
+        "\"อาจารย์ประจำ\"",
+        "\"คณะเทคโนโลยีสารสนเทศและนวัตกรรม\"",
+        "\"somchai.j@bu.ac.th\"",
+        "\"02-123-4567\""
+      ];
+      const csvContent = "\uFEFF" + [headers.join(","), exampleRow.join(",")].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "professors_template.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess("ดาวน์โหลดไฟล์แม่แบบ CSV สำหรับกรอกข้อมูลสำเร็จแล้ว!");
+      setTimeout(() => setSuccess(null), 3500);
+    } catch (err: any) {
+      setError(`เกิดข้อผิดพลาดในการดาวน์โหลดแม่แบบ: ${err.message || err}`);
+    }
   };
 
   const handleProfDelete = async (id: string, name: string) => {
@@ -682,29 +840,92 @@ export default function UserManagement({
       {/* TAB CONTENT: PROGRESS / PROFESSORS DATABASE */}
       {subTab === "professors" && (
         <div className="space-y-4 animate-fadeIn">
-          {/* Search and register button */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm font-sans">
-            <div className="relative w-full sm:max-w-xs font-sans">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-sans">
-                <Search size={14} />
-              </span>
-              <input
-                type="text"
-                value={profSearch}
-                onChange={(e) => setProfSearch(e.target.value)}
-                placeholder="ค้นหาอาจารย์... (ชื่อ, ตำแหน่ง, สังกัด)"
-                className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-slate-800"
-              />
-            </div>
+          {/* Search and action deck */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 font-sans">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 font-sans">
+              <div className="relative w-full lg:max-w-xs font-sans">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-sans">
+                  <Search size={14} />
+                </span>
+                <input
+                  type="text"
+                  value={profSearch}
+                  onChange={(e) => setProfSearch(e.target.value)}
+                  placeholder="ค้นหาอาจารย์... (ชื่อ, ตำแหน่ง, สังกัด)"
+                  className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-slate-800"
+                />
+              </div>
 
-            <button
-              type="button"
-              onClick={() => openAddProfModal()}
-              className="h-9 px-4 bg-indigo-950 hover:bg-slate-900 text-white font-bold text-xs rounded-lg shadow-sm border border-slate-800 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
-            >
-              <Plus size={14} />
-              <span>ลงทะเบียนอาจารย์ท่านใหม่</span>
-            </button>
+              {/* Action Buttons Desk */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Download CSV Template */}
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  title="ดาวน์โหลดไฟล์แม่แบบ CSV"
+                  className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
+                >
+                  <Download size={13} className="text-slate-500" />
+                  <span>แม่แบบ CSV</span>
+                </button>
+
+                {/* Import CSV */}
+                <label className="h-9 px-3 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-950 font-bold text-[11px] rounded-lg border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans">
+                  <Upload size={13} className="text-indigo-700" />
+                  <span>นำเข้า CSV</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCsvImport}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* Import JSON */}
+                <label className="h-9 px-3 bg-blue-50 hover:bg-blue-100/80 text-blue-950 font-bold text-[11px] rounded-lg border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans">
+                  <Upload size={13} className="text-blue-700" />
+                  <span>นำเข้า JSON</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleJsonImport}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* Export CSV */}
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  title="ส่งออกรายชื่ออาจารย์ทั้งหมดเป็น CSV"
+                  className="h-9 px-3 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-950 font-bold text-[11px] rounded-lg border border-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
+                >
+                  <FileSpreadsheet size={13} className="text-emerald-700" />
+                  <span>ส่งออก CSV</span>
+                </button>
+
+                {/* Export JSON */}
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  title="ส่งออกรายชื่ออาจารย์ทั้งหมดเป็น JSON"
+                  className="h-9 px-3 bg-amber-50 hover:bg-amber-100/80 text-amber-950 font-bold text-[11px] rounded-lg border border-amber-200 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
+                >
+                  <Download size={13} className="text-amber-700" />
+                  <span>ส่งออก JSON</span>
+                </button>
+
+                {/* Register New Professor */}
+                <button
+                  type="button"
+                  onClick={() => openAddProfModal()}
+                  className="h-9 px-4 bg-indigo-950 hover:bg-slate-900 text-white font-bold text-[11px] rounded-lg shadow-sm border border-slate-800 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 text-nowrap font-sans"
+                >
+                  <Plus size={14} />
+                  <span>ลงทะเบียนอาจารย์ท่านใหม่</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Professor list tables */}
