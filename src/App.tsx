@@ -396,7 +396,7 @@ export default function App() {
     }
   }, [userEmail, adminEmails]);
 
-  // 5. Inactivity Secure Session Idle Timer (60-minute threshold for development comfort)
+  // 5. Inactivity Secure Session Idle Timer (15-minute threshold as requested)
   useEffect(() => {
     if (!userEmail) return;
 
@@ -411,8 +411,8 @@ export default function App() {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      // 60 minutes = 3,600,000 ms (Extended for active development)
-      timeoutId = setTimeout(handleInactivityLogout, 3600000);
+      // 15 minutes = 900,000 ms (Adjusted for security requirements)
+      timeoutId = setTimeout(handleInactivityLogout, 900000);
     };
 
     // Initialize timer on load
