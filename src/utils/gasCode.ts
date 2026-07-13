@@ -109,33 +109,21 @@ function doPost(e) {
         throw new Error("ไม่พบข้อมูลอาเรย์สำหรับนำเข้า CSV (IMPORT_CSV)");
       }
       
-      var existingIds = [];
-      var existingEmails = [];
-      var existingPersIds = [];
       var idToRowMap = {};
       var emailToRowMap = {};
       var persIdToRowMap = {};
       
       if (lastRow > 1) {
-        var allValues = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-        for (var idx = 0; idx < allValues.length; idx++) {
-          var rowNum = idx + 2;
-          var curId = allValues[idx][0] ? allValues[idx][0].toString().trim() : "";
-          var curPersId = allValues[idx][2] ? allValues[idx][2].toString().trim() : "";
-          var curEmail = allValues[idx][5] ? allValues[idx][5].toString().trim().toLowerCase() : "";
+        var allData = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+        for (var i = 0; i < allData.length; i++) {
+          var rowNum = i + 2;
+          var curId = allData[i][0] ? allData[i][0].toString().trim() : "";
+          var curPersId = allData[i][2] ? allData[i][2].toString().trim() : "";
+          var curEmail = allData[i][5] ? allData[i][5].toString().trim().toLowerCase() : "";
           
-          if (curId) {
-            existingIds.push(curId);
-            idToRowMap[curId] = rowNum;
-          }
-          if (curEmail) {
-            existingEmails.push(curEmail);
-            emailToRowMap[curEmail] = rowNum;
-          }
-          if (curPersId) {
-            existingPersIds.push(curPersId);
-            persIdToRowMap[curPersId] = rowNum;
-          }
+          if (curId) idToRowMap[curId] = rowNum;
+          if (curPersId) persIdToRowMap[curPersId] = rowNum;
+          if (curEmail) emailToRowMap[curEmail] = rowNum;
         }
       }
       
@@ -229,20 +217,20 @@ function doPost(e) {
         var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
         for (var i = 0; i < ids.length; i++) {
           if (ids[i][0].toString() === targetId.toString()) {
-            foundRow = i + 2; // คำนวณเลขชี้ของแถวจริงรวม header
+            foundRow = i + 2;
             break;
           }
         }
       }
       
-      var name = profData.name || payload.name || "";
-      var personalId = profData.personalId || payload.personalId || "";
-      var position = profData.position || payload.position || "";
-      var department = profData.department || payload.department || "";
-      var email = profData.email || payload.email || "";
-      var phone = profData.phone || payload.phone || "";
-      
       if (foundRow !== -1) {
+        var name = profData.name || "";
+        var personalId = profData.personalId || "";
+        var position = profData.position || "";
+        var department = profData.department || "";
+        var email = profData.email || "";
+        var phone = profData.phone || "";
+        
         sheet.getRange(foundRow, 2).setValue(name);
         sheet.getRange(foundRow, 3).setValue(personalId);
         sheet.getRange(foundRow, 4).setValue(position);
@@ -256,19 +244,11 @@ function doPost(e) {
           data: { id: targetId, name: name, personalId: personalId, position: position, department: department, email: email, phone: phone }
         });
       } else {
-        // หากไม่เจอแถว ID ให้เพิ่มเข้าไปใหม่
-        sheet.appendRow([targetId, name, personalId, position, department, email, phone]);
-        return responseJson({
-          status: "success",
-          message: "ไม่พบข้อมูลเดิม ทำการขึ้นทะเบียนแถวใหม่สำเร็จ"
-        });
+        throw new Error("ไม่พบข้อมูลอาจารย์ที่มีรหัส ID: " + targetId);
       }
     }
     
     if (action === "DELETE" || action === "DELETE_PROF") {
-      // ลบข้อมูลแถวตาม ID ที่ระบุ จาก Google Sheets
-      // ⚠️ กฎเหล็กด้านความปลอดภัยด้านความเป็นส่วนตัว: ห้ามทำการส่งอีเมลแจ้งเตือนใด ๆ ทั้งสิ้นเมื่อทำการลบข้อมูล
-      // ห้ามมีคำสั่ง MailApp.sendEmail หรือ GmailApp.sendEmail ในเคสนี้เด็ดขาด ระบบจะทำงานเงียบ ๆ เท่านั้น
       var targetId = payload.id;
       if (!targetId) throw new Error("ไม่พบรหัสผู้ใช้ ID ในคำสั่งลบ");
       
@@ -320,14 +300,14 @@ function sendAssessmentEmail(payload) {
   
   // ออกแบบหน้าเค้าร่าง HTML ธีมสีม่วงสะดุดตาระดับพรีเมียม สไตล์รูปภาพตัวอย่างที่ 1 บูรณาการหัวข้อและระบบให้คะแนนอย่างเสถียรที่สุด
   var htmlBody = 
-    '<div style="font-family: \'Sarabun\', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; line-height: 1.6; background-color: #fbf9fe; border-radius: 16px; border: 1px solid #e9d5ff;">' +
+    '<div style="font-family: Sarabun, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333; line-height: 1.6; background-color: #fbf9fe; border-radius: 16px; border: 1px solid #e9d5ff;">' +
       '<!-- Header Banner (Purple Elegant Styling) -->' +
       '<div style="background-color: #6b21a8; padding: 32px 24px; border-radius: 12px 12px 0 0; text-align: center; background-image: linear-gradient(135deg, #6b21a8 0%, #5b21b6 100%);">' +
         '<span style="font-size: 40px; display: block; margin-bottom: 12px; line-height: 1;">✨</span>' +
-        '<h2 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: bold; font-family: \'Sarabun\', sans-serif; letter-spacing: -0.5px;">' +
+        '<h2 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: bold; font-family: Sarabun, sans-serif; letter-spacing: -0.5px;">' +
           'พิจารณาเอกสารเสร็จสิ้น' +
         '</h2>' +
-        '<p style="color: #e9d5ff; margin: 6px 0 0 0; font-size: 13px; font-weight: normal; font-family: \'Sarabun\', sans-serif;">' +
+        '<p style="color: #e9d5ff; margin: 6px 0 0 0; font-size: 13px; font-weight: normal; font-family: Sarabun, sans-serif;">' +
           'เอกสารของท่านได้รับการพิจารณาและส่งต้นต่อเสร็จสมบูรณ์แล้ว' +
         '</p>' +
       '</div>' +
@@ -344,7 +324,7 @@ function sendAssessmentEmail(payload) {
 
         '<!-- Table Details with High-Fidelity Purple Accent Left Border -->' +
         '<div style="border-left: 4px solid #6b21a8; border-top: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; border-bottom: 1px solid #f3e8ff; border-radius: 4px; overflow: hidden; margin-bottom: 24px;">' +
-          '<table style="width: 100%; border-collapse: collapse; font-size: 13px; font-family: \'Sarabun\', sans-serif;">' +
+          '<table style="width: 100%; border-collapse: collapse; font-size: 13px; font-family: Sarabun, sans-serif;">' +
             '<tr>' +
               '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
                 '<span style="color: #7c3aed; margin-right: 6px;">•</span>เลขที่อ้างอิง วพ.:' +
@@ -359,7 +339,7 @@ function sendAssessmentEmail(payload) {
               '</td>' +
               '<td style="padding: 12px 15px; color: #4b5563; border-bottom: 1px solid #f3e8ff; vertical-align: top;">' + 
                 (payload.docNumber || '-') + 
-              </td>' +
+              '</td>' +
             '</tr>' +
             '<tr>' +
               '<td style="width: 35%; padding: 12px 15px; background-color: #fcfaff; font-weight: bold; color: #5b21b6; border-bottom: 1px solid #f3e8ff; border-right: 1px solid #f3e8ff; vertical-align: top;">' +
@@ -404,10 +384,10 @@ function sendAssessmentEmail(payload) {
 
         '<!-- 📊 Section: Google Form Pre-filled Star Rating (Interactive Style) -->' +
         '<div style="background-color: #faf5ff; border: 2px dashed #d8b4fe; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">' +
-          '<h3 style="color: #5b21b6; margin: 0 0 6px 0; font-size: 15px; font-weight: bold; font-family: \'Sarabun\', sans-serif;">' +
+          '<h3 style="color: #5b21b6; margin: 0 0 6px 0; font-size: 15px; font-weight: bold; font-family: Sarabun, sans-serif;">' +
             '❤️ ช่วยประเมินบริการของเราหน่อยได้ไหมคะ?' +
           '</h3>' +
-          '<p style="color: #6b21a8; margin: 0 0 18px 0; font-size: 12px; line-height: 1.5; font-family: \'Sarabun\', sans-serif;">' +
+          '<p style="color: #6b21a8; margin: 0 0 18px 0; font-size: 12px; line-height: 1.5; font-family: Sarabun, sans-serif;">' +
             'กรุณาคลิกเลือกดาวเพื่อประเมินความพึงพอใจในการให้บริการในครั้งนี้<br/>(ระบบจะรวมคะแนนส่งเข้า Google Form เพื่อสถิติที่เสถียรและแม่นยำที่สุด)' +
           '</p>' +
 
@@ -415,7 +395,7 @@ function sendAssessmentEmail(payload) {
             '<tr>' +
               '<!-- 🤬 1 ดาว -->' +
               '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
-                '<a href="\' + baseFormUrl + \'1" target="_blank" style="text-decoration: none; display: block;">' +
+                '<a href="' + baseFormUrl + '1" target="_blank" style="text-decoration: none; display: block;">' +
                   '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🤬</span>' +
                   '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ปรับปรุง</span>' +
                   '<span style="font-size: 11px; color: #d946ef; display: block;">★</span>' +
@@ -423,7 +403,7 @@ function sendAssessmentEmail(payload) {
               '</td>' +
               '<!-- 🙁 2 ดาว -->' +
               '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
-                '<a href="\' + baseFormUrl + \'2" target="_blank" style="text-decoration: none; display: block;">' +
+                '<a href="' + baseFormUrl + '2" target="_blank" style="text-decoration: none; display: block;">' +
                   '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🙁</span>' +
                   '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">พอใช้</span>' +
                   '<span style="font-size: 11px; color: #d946ef; display: block;">★★</span>' +
@@ -431,7 +411,7 @@ function sendAssessmentEmail(payload) {
               '</td>' +
               '<!-- 😐 3 ดาว -->' +
               '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
-                '<a href="\' + baseFormUrl + \'3" target="_blank" style="text-decoration: none; display: block;">' +
+                '<a href="' + baseFormUrl + '3" target="_blank" style="text-decoration: none; display: block;">' +
                   '<span style="font-size: 24px; display: block; margin-bottom: 4px;">😐</span>' +
                   '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ปานกลาง</span>' +
                   '<span style="font-size: 11px; color: #d946ef; display: block;">★★★</span>' +
@@ -439,7 +419,7 @@ function sendAssessmentEmail(payload) {
               '</td>' +
               '<!-- 😊 4 ดาว -->' +
               '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
-                '<a href="\' + baseFormUrl + \'4" target="_blank" style="text-decoration: none; display: block;">' +
+                '<a href="' + baseFormUrl + '4" target="_blank" style="text-decoration: none; display: block;">' +
                   '<span style="font-size: 24px; display: block; margin-bottom: 4px;">😊</span>' +
                   '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ดี</span>' +
                   '<span style="font-size: 11px; color: #d946ef; display: block;">★★★★</span>' +
@@ -447,7 +427,7 @@ function sendAssessmentEmail(payload) {
               '</td>' +
               '<!-- 🤩 5 ดาว -->' +
               '<td style="width: 20%; background-color: #ffffff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 4px; text-align: center; vertical-align: middle; box-shadow: 0 2px 4px rgba(107,33,168,0.02);">' +
-                '<a href="\' + baseFormUrl + \'5" target="_blank" style="text-decoration: none; display: block;">' +
+                '<a href="' + baseFormUrl + '5" target="_blank" style="text-decoration: none; display: block;">' +
                   '<span style="font-size: 24px; display: block; margin-bottom: 4px;">🤩</span>' +
                   '<span style="font-size: 10.5px; font-weight: bold; color: #7c3aed; display: block; margin-bottom: 2px;">ดีเยี่ยม</span>' +
                   '<span style="font-size: 11px; color: #d946ef; display: block;">★★★★★</span>' +
@@ -457,7 +437,7 @@ function sendAssessmentEmail(payload) {
           '</table>' +
           
           '<div style="margin-top: 20px;">' +
-            '<a href="\' + baseFormUrl + \'5" target="_blank" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 9999px; text-decoration: none; font-size: 13.5px; font-weight: bold; box-shadow: 0 4px 10px rgba(124, 58, 237, 0.25);">' +
+            '<a href="' + baseFormUrl + '5" target="_blank" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 9999px; text-decoration: none; font-size: 13.5px; font-weight: bold; box-shadow: 0 4px 10px rgba(124, 58, 237, 0.25);">' +
               '✍️ ประเมินความพึงพอใจการให้บริการ' +
             '</a>' +
             '<p style="color: #7c3aed; margin: 8px 0 0 0; font-size: 11px;">ใช้เวลาเพียง 1 นาที เพื่อช่วยเราพัฒนาการบริการ</p>' +

@@ -483,6 +483,12 @@ export default function Dashboard({
 
   const completedOutbox = outboxDocs.filter(isDocCompleted).length;
 
+  // Count of outbox documents that do not have a recipient name specified (not yet dispatched / sent out)
+  const notExportedOutboxCount = outboxDocs.filter(d => {
+    const receiver = d.receiverName || d.receiver || "";
+    return !receiver.trim();
+  }).length;
+
   // Count unique incoming documents where status is "พิจารณาแล้ว" or "อนุมัติ"
   const incomingApprovedCount = inboxDocs.filter(d => d.status === "พิจารณาแล้ว" || d.status === "อนุมัติ").length;
 
@@ -784,12 +790,12 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* KPI 4: ส่งมอบ/เสร็จสิ้น */}
+        {/* KPI 4: ยังไม่ได้ส่งออก */}
         <div className="bg-gradient-to-br from-violet-50/80 to-blue-50/50 border border-violet-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
-              <span className="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest block truncate overflow-hidden font-sans">ส่งมอบ/เสร็จสิ้น</span>
-              <span className="text-lg md:text-xl font-bold font-mono text-[#4C1D95] mt-1 block">{outboxDocs.length} <span className="text-xs font-bold text-violet-700/60 font-sans">รายการ</span></span>
+              <span className="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest block truncate overflow-hidden font-sans">ยังไม่ได้ส่งออก</span>
+              <span className="text-lg md:text-xl font-bold font-mono text-[#4C1D95] mt-1 block">{notExportedOutboxCount} <span className="text-xs font-bold text-violet-700/60 font-sans">รายการ</span></span>
             </div>
             <span className="p-1.5 bg-violet-100/80 text-violet-700 border border-violet-200/50 rounded-xl shrink-0 ml-1.5 shadow-sm font-bold">
               <FileText size={14} />
