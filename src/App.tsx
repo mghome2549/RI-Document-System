@@ -56,7 +56,17 @@ export default function App() {
   const [userName, setUserName] = useState<string>("");
   const [userRole, setUserRole] = useState<"admin" | "viewer">("viewer");
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [ledgerWorkflowTab, setLedgerWorkflowTab] = useState<"all" | "pending_vp" | "pending_outgoing">("all");
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState<string>("all");
   const [authLoading, setAuthLoading] = useState(true);
+
+  const handleSetActiveTab = (tab: string) => {
+    if (tab === "ledger") {
+      setLedgerWorkflowTab("all");
+      setLedgerStatusFilter("all");
+    }
+    setActiveTab(tab);
+  };
   const [showTimeoutAlert, setShowTimeoutAlert] = useState(false);
 
   // Public rating flow states
@@ -761,7 +771,7 @@ export default function App() {
       {/* 1. Left Responsive Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleSetActiveTab}
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
         userEmail={userEmail}
@@ -827,6 +837,8 @@ export default function App() {
               setSelectedYear={setSelectedYear}
               currentYear={currentAcademicYear}
               setActiveTab={setActiveTab}
+              setLedgerWorkflowTab={setLedgerWorkflowTab}
+              setLedgerStatusFilter={setLedgerStatusFilter}
             />
           )}
 
@@ -839,6 +851,10 @@ export default function App() {
               userRole={userRole}
               selectedFilterYear={selectedYear}
               setSelectedFilterYear={setSelectedYear}
+              activeWorkflowTab={ledgerWorkflowTab}
+              setActiveWorkflowTab={setLedgerWorkflowTab}
+              statusFilter={ledgerStatusFilter}
+              setStatusFilter={setLedgerStatusFilter}
             />
           )}
 

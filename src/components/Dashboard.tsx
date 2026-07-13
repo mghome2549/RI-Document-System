@@ -15,6 +15,8 @@ interface DashboardProps {
   currentYear: number;
   setActiveTab: (tab: any) => void;
   setSelectedDoc?: (doc: Document) => void;
+  setLedgerWorkflowTab?: (tab: "all" | "pending_vp" | "pending_outgoing") => void;
+  setLedgerStatusFilter?: (status: string) => void;
 }
 
 export default function Dashboard({
@@ -22,7 +24,9 @@ export default function Dashboard({
   selectedYear,
   setSelectedYear,
   currentYear,
-  setActiveTab
+  setActiveTab,
+  setLedgerWorkflowTab,
+  setLedgerStatusFilter
 }: DashboardProps) {
   // Report Ref and Dialog visibility
   const reportRef = useRef<HTMLDivElement>(null);
@@ -742,7 +746,14 @@ export default function Dashboard({
       {/* Primary KPI Metrics Block - Elegant 5-Card Flex Layout */}
       <div className="flex flex-row gap-3 w-full items-stretch justify-between overflow-x-auto pb-2">
         {/* KPI 1: เอกสารเข้าทั้งหมด */}
-        <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/50 border border-indigo-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+        <div 
+          onClick={() => {
+            if (setLedgerWorkflowTab) setLedgerWorkflowTab("all");
+            if (setLedgerStatusFilter) setLedgerStatusFilter("all");
+            setActiveTab("ledger");
+          }}
+          className="bg-gradient-to-br from-indigo-50/80 to-purple-50/50 border border-indigo-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans cursor-pointer hover:shadow-md"
+        >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest block truncate">เอกสารเข้าทั้งหมด</span>
@@ -759,7 +770,14 @@ export default function Dashboard({
         </div>
 
         {/* KPI 2: อยู่ระหว่างพิจารณา */}
-        <div className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+        <div 
+          onClick={() => {
+            if (setLedgerWorkflowTab) setLedgerWorkflowTab("pending_vp");
+            if (setLedgerStatusFilter) setLedgerStatusFilter("all");
+            setActiveTab("ledger");
+          }}
+          className="bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans cursor-pointer hover:shadow-md"
+        >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-extrabold text-amber-600 uppercase tracking-widest block truncate overflow-hidden">อยู่ระหว่างพิจารณา</span>
@@ -775,7 +793,14 @@ export default function Dashboard({
         </div>
 
         {/* KPI 3: พิจารณาแล้ว */}
-        <div className="bg-gradient-to-br from-emerald-50/80 to-green-50/50 border border-emerald-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+        <div 
+          onClick={() => {
+            if (setLedgerWorkflowTab) setLedgerWorkflowTab("all");
+            if (setLedgerStatusFilter) setLedgerStatusFilter("พิจารณาแล้ว");
+            setActiveTab("ledger");
+          }}
+          className="bg-gradient-to-br from-emerald-50/80 to-green-50/50 border border-emerald-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans cursor-pointer hover:shadow-md"
+        >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest block truncate overflow-hidden">พิจารณาแล้ว</span>
@@ -791,7 +816,14 @@ export default function Dashboard({
         </div>
 
         {/* KPI 4: ยังไม่ได้ส่งออก */}
-        <div className="bg-gradient-to-br from-violet-50/80 to-blue-50/50 border border-violet-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+        <div 
+          onClick={() => {
+            if (setLedgerWorkflowTab) setLedgerWorkflowTab("pending_outgoing");
+            if (setLedgerStatusFilter) setLedgerStatusFilter("all");
+            setActiveTab("ledger");
+          }}
+          className="bg-gradient-to-br from-violet-50/80 to-blue-50/50 border border-violet-100 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans cursor-pointer hover:shadow-md"
+        >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-extrabold text-violet-600 uppercase tracking-widest block truncate overflow-hidden font-sans">ยังไม่ได้ส่งออก</span>
@@ -807,7 +839,14 @@ export default function Dashboard({
         </div>
 
         {/* KPI 5: ล่าช้าเกิน 5 วัน */}
-        <div className="bg-gradient-to-br from-rose-50 to-red-100 border border-red-200 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans">
+        <div 
+          onClick={() => {
+            if (setLedgerWorkflowTab) setLedgerWorkflowTab("all");
+            if (setLedgerStatusFilter) setLedgerStatusFilter("delayed");
+            setActiveTab("ledger");
+          }}
+          className="bg-gradient-to-br from-rose-50 to-red-100 border border-red-200 shadow-sm flex-1 min-w-[150px] md:min-w-0 h-full p-4 rounded-2xl flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 font-sans cursor-pointer hover:shadow-md"
+        >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
               <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-widest block truncate overflow-hidden">ล่าช้าเกิน 5 วัน</span>

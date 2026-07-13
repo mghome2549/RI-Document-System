@@ -31,6 +31,10 @@ interface IncomingDocumentsProps {
   userRole: "admin" | "viewer";
   selectedFilterYear: number | "all";
   setSelectedFilterYear?: (year: number | "all") => void;
+  activeWorkflowTab?: "all" | "pending_vp" | "pending_outgoing";
+  setActiveWorkflowTab?: (tab: "all" | "pending_vp" | "pending_outgoing") => void;
+  statusFilter?: string;
+  setStatusFilter?: (status: string) => void;
 }
 
 const isInstitutionalReceiver = (name?: string) => {
@@ -74,7 +78,11 @@ export default function IncomingDocuments({
   onDeleteDoc,
   userRole,
   selectedFilterYear,
-  setSelectedFilterYear
+  setSelectedFilterYear,
+  activeWorkflowTab: propActiveWorkflowTab,
+  setActiveWorkflowTab: propSetActiveWorkflowTab,
+  statusFilter: propStatusFilter,
+  setStatusFilter: propSetStatusFilter
 }: IncomingDocumentsProps) {
   const isAdmin = userRole === "admin";
 
@@ -85,7 +93,9 @@ export default function IncomingDocuments({
 
   // States
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [localStatusFilter, setLocalStatusFilter] = useState("all");
+  const statusFilter = propStatusFilter ?? localStatusFilter;
+  const setStatusFilter = propSetStatusFilter ?? setLocalStatusFilter;
   const [legacyOutbox, setLegacyOutbox] = useState<any[]>([]);
   const [isLoadingLegacy, setIsLoadingLegacy] = useState(false);
 
@@ -149,7 +159,9 @@ export default function IncomingDocuments({
   const [duplicateWarning, setDuplicateWarning] = useState(false);
 
   // States of Refactoring (Enterprise Performance Pagination, Quick-Filters & Reset Trigger)
-  const [activeWorkflowTab, setActiveWorkflowTab] = useState<"all" | "pending_vp" | "pending_outgoing">("all");
+  const [localActiveWorkflowTab, setLocalActiveWorkflowTab] = useState<"all" | "pending_vp" | "pending_outgoing">("all");
+  const activeWorkflowTab = propActiveWorkflowTab ?? localActiveWorkflowTab;
+  const setActiveWorkflowTab = propSetActiveWorkflowTab ?? setLocalActiveWorkflowTab;
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -1101,7 +1113,20 @@ Email: kittiwat.p@bu.ac.th
         return false;
       }
     } else {
-      if (statusFilter !== "all" && currentStatus !== statusFilter) {
+      if (statusFilter === "delayed") {
+        const isDelayed = (d: Document) => {
+          if (d.status !== "อยู่ระหว่างพิจารณา") return false;
+          const baseDateStr = d.receiveDate || d.receivedDate || d.createdAt;
+          if (!baseDateStr) return false;
+          const baseDate = new Date(baseDateStr);
+          if (isNaN(baseDate.getTime())) return false;
+          const diffTime = new Date().getTime() - baseDate.getTime();
+          return diffTime > 5 * 24 * 60 * 60 * 1000;
+        };
+        if (!isDelayed(item)) {
+          return false;
+        }
+      } else if (statusFilter !== "all" && currentStatus !== statusFilter) {
         return false;
       }
     }
@@ -1168,6 +1193,7 @@ Email: kittiwat.p@bu.ac.th
               <option value="อนุมัติ">อนุมัติ</option>
               <option value="ลงนามแล้ว">ลงนามแล้ว</option>
               <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
+              <option value="delayed">ล่าช้าเกิน 5 วัน</option>
             </select>
           </div>
 
