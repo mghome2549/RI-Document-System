@@ -74,6 +74,59 @@ export default function Dashboard({
     fetchEvaluations();
   }, [documents]);
 
+  // Load Legacy Outgoing Documents for matching logic exactly as IncomingDocuments.tsx
+  const [legacyOutbox, setLegacyOutbox] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchLegacy = async () => {
+      if (isFirebaseConfigured && db) {
+        try {
+          const [snap1, snap2] = await Promise.all([
+            getDocs(collection(db, "outgoing_documents")).catch(() => null),
+            getDocs(collection(db, "outgoingDocuments")).catch(() => null)
+          ]);
+
+          const list: any[] = [];
+          if (snap1) {
+            snap1.forEach((d) => {
+              list.push({ id: d.id, ...d.data() });
+            });
+          }
+          if (snap2) {
+            snap2.forEach((d) => {
+              const data = d.data();
+              if (!list.some(existing => existing.id === d.id)) {
+                list.push({ id: d.id, ...data });
+              }
+            });
+          }
+
+          const propOutbox = documents.filter(d => d.category === DocumentCategory.OUTBOX);
+          propOutbox.forEach((pDoc) => {
+            if (!list.some(existing => existing.id === pDoc.id)) {
+              list.push(pDoc);
+            }
+          });
+
+          setLegacyOutbox(list);
+        } catch (err) {
+          console.error("Firebase multi-source legacy outbox load failed in Dashboard:", err);
+        }
+      } else {
+        try {
+          const stored = localStorage.getItem("bu_docs_data");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setLegacyOutbox(parsed.filter((d: any) => d.category === DocumentCategory.OUTBOX));
+          }
+        } catch (err) {
+          console.error("Failed to read local legacy outbox in Dashboard:", err);
+        }
+      }
+    };
+    fetchLegacy();
+  }, [documents]);
+
   const handleExportCombineExcel = async () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -488,19 +541,83 @@ export default function Dashboard({
   const completedOutbox = outboxDocs.filter(isDocCompleted).length;
 
   // Count of outbox documents that do not have a recipient name specified (not yet dispatched / sent out)
-  const notExportedOutboxCount = outboxDocs.filter(d => {
-    const receiver = d.receiverName || d.receiver || "";
-    return !receiver.trim();
+  const notExportedOutboxCount = inboxDocs.filter(docItem => {
+    const currentStatus = docItem.vpRouting?.status || docItem.status || "อยู่ระหว่างพิจารณา";
+    const isApprovedOrSigned = currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
+    if (!isApprovedOrSigned) return false;
+
+    const isInstitutionalReceiver = (name?: string) => {
+      if (!name) return false;
+      const n = name.trim();
+      return (
+        n.includes("รองอธิการบดี") ||
+        n.includes("รอง วพ.") ||
+        n.includes("สายวิจัยและพัฒนา")
+      );
+    };
+
+    const normRef = (docItem.riRefNo || docItem.vopId || docItem.number || "").replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+    const formattedDoc = formatRiRefNo(docItem.riRefNo || docItem.vopId || docItem.number || "", docItem.academicYear).replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+    
+    let match: any = null;
+    if (normRef || formattedDoc) {
+      match = legacyOutbox.find((o) => {
+        const outRef = (o.riRefNo || o.vopId || o.number || "").replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+        const formattedO = formatRiRefNo(o.riRefNo || o.vopId || o.number || "", o.academicYear).replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+        
+        const matchesRef = outRef === normRef || outRef === formattedDoc || formattedO === normRef || formattedO === formattedDoc;
+        const matchesOrigId = o.originalDocId === docItem.id;
+        const matchesOrigVop = o.originalDocVopId && (o.originalDocVopId.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim() === normRef || o.originalDocVopId.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim() === formattedDoc);
+        return matchesRef || matchesOrigId || matchesOrigVop;
+      });
+    }
+
+    // Determine outbound receiver strictly avoiding static institutional titles
+    let receiver = "";
+    if (docItem.receiver && !isInstitutionalReceiver(docItem.receiver)) {
+      receiver = docItem.receiver.trim();
+    } else if (match) {
+      if (match.receiver && !isInstitutionalReceiver(match.receiver)) {
+        receiver = match.receiver.trim();
+      } else if (match.receiverName && !isInstitutionalReceiver(match.receiverName)) {
+        receiver = match.receiverName.trim();
+      } else if (match.receiver) {
+        receiver = match.receiver.trim();
+      } else if (match.receiverName) {
+        receiver = match.receiverName.trim();
+      }
+    }
+
+    if (!receiver && docItem.receiver) {
+      receiver = docItem.receiver.trim();
+    }
+
+    let sendDate = "";
+    if (docItem.sendDate) {
+      sendDate = docItem.sendDate;
+    } else if (match && (match.sendDate || match.dispatchDate)) {
+      sendDate = match.sendDate || match.dispatchDate || "";
+    }
+
+    const hasNoOutgoingInfo = !sendDate && !receiver;
+    return hasNoOutgoingInfo;
   }).length;
 
-  // Count unique incoming documents where status is "พิจารณาแล้ว" or "อนุมัติ"
-  const incomingApprovedCount = inboxDocs.filter(d => d.status === "พิจารณาแล้ว" || d.status === "อนุมัติ").length;
+  // Count unique incoming documents where status is "พิจารณาแล้ว", "อนุมัติ", or "ลงนามแล้ว"
+  const incomingApprovedCount = inboxDocs.filter(d => {
+    const currentStatus = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
+    return currentStatus === "พิจารณาแล้ว" || currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
+  }).length;
 
-  const inboxPendingCount = inboxDocs.filter(d => d.status === "อยู่ระหว่างพิจารณา").length;
+  const inboxPendingCount = inboxDocs.filter(d => {
+    const currentStatus = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
+    return currentStatus === "อยู่ระหว่างพิจารณา";
+  }).length;
 
   // Computed SLA delayed incoming count: Pending and received > 5 calendar days ago
   const slaDelayedCount = inboxDocs.filter(d => {
-    if (d.status !== "อยู่ระหว่างพิจารณา") return false;
+    const currentStatus = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
+    if (currentStatus !== "อยู่ระหว่างพิจารณา") return false;
     const baseDateStr = d.receiveDate || d.receivedDate || d.createdAt;
     if (!baseDateStr) return false;
     const baseDate = new Date(baseDateStr);
@@ -510,7 +627,10 @@ export default function Dashboard({
   }).length;
 
   const successRate = inboxDocs.length > 0
-    ? Math.round((incomingApprovedCount / inboxDocs.length) * 100)
+    ? Math.round((inboxDocs.filter(d => {
+        const cs = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
+        return cs === "พิจารณาแล้ว" || cs === "อนุมัติ" || cs === "ลงนามแล้ว";
+      }).length / inboxDocs.length) * 100)
     : 0;
 
   // Overdue/Late status count: LATE status or INBOX that are not approved and received > 5 days ago
@@ -553,7 +673,7 @@ export default function Dashboard({
   const pendingOutbox = outboxDocs.filter(d => d.status === DocumentStatus.PENDING).length;
 
   // 1. Chart Data calculation: ประเภทเอกสารเข้า (Inbox Delivery Channels Only)
-  const inboxDocsForChart = filteredDocs.filter(d => d.category === DocumentCategory.INBOX);
+  const inboxDocsForChart = inboxDocs;
   const chartTotal = inboxDocsForChart.length;
   const emailCount = inboxDocsForChart.filter(d => d.docType === "e-mail" || d.docType === "อีเมล").length;
   const paperCount = chartTotal - emailCount;

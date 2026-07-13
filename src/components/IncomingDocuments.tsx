@@ -1115,7 +1115,7 @@ Email: kittiwat.p@bu.ac.th
     } else {
       if (statusFilter === "delayed") {
         const isDelayed = (d: Document) => {
-          if (d.status !== "อยู่ระหว่างพิจารณา") return false;
+          if (currentStatus !== "อยู่ระหว่างพิจารณา") return false;
           const baseDateStr = d.receiveDate || d.receivedDate || d.createdAt;
           if (!baseDateStr) return false;
           const baseDate = new Date(baseDateStr);
@@ -1124,6 +1124,10 @@ Email: kittiwat.p@bu.ac.th
           return diffTime > 5 * 24 * 60 * 60 * 1000;
         };
         if (!isDelayed(item)) {
+          return false;
+        }
+      } else if (statusFilter === "พิจารณาแล้ว") {
+        if (currentStatus !== "พิจารณาแล้ว" && currentStatus !== "อนุมัติ" && currentStatus !== "ลงนามแล้ว") {
           return false;
         }
       } else if (statusFilter !== "all" && currentStatus !== statusFilter) {
