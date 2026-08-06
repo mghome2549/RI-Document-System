@@ -134,3 +134,34 @@ export function formatRiRefNo(id: string | undefined | null, defaultYear?: numbe
 
   return trimmed;
 }
+
+/**
+ * Extract and format "เลขที่หนังสือ" (Book / Document Number) for display and export.
+ * Strips any leading "วพ." or "วพ " or "วพ/" or "วพ-" prefix so it doesn't duplicate "เลขที่ วพ."
+ */
+export function getDisplayBookNumber(d: any): string {
+  if (!d) return "-";
+
+  // Check explicit docNumber or bookNumber fields first, fallback to number
+  const rawDocNumber = typeof d.docNumber === "string" ? d.docNumber.trim() : "";
+  const rawBookNumber = typeof d.bookNumber === "string" ? d.bookNumber.trim() : "";
+  const rawNumber = typeof d.number === "string" ? d.number.trim() : "";
+
+  let candidate = rawDocNumber || rawBookNumber;
+
+  if (!candidate && rawNumber) {
+    candidate = rawNumber;
+  }
+
+  if (!candidate) return "-";
+
+  // Strip leading "วพ." / "วพ " / "วพ/" / "วพ-"
+  let cleaned = candidate.replace(/^วพ[\.\s\/\-]*/i, "").trim();
+
+  // If after stripping "วพ." we get something like "065/2568", convert "065/2568" -> "65/2568"
+  cleaned = cleaned.replace(/^0+([1-9]\d*\/)/, "$1");
+
+  if (!cleaned) return "-";
+
+  return cleaned;
+}

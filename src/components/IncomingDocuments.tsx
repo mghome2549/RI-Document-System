@@ -3,7 +3,7 @@ import emailjs from "emailjs-com";
 import { saveDocumentLog } from "../services/supabaseClient";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory, VpRouting } from "../types";
-import { getAcademicYear, formatThaiDate, formatRiRefNo } from "../utils/academicYear";
+import { getAcademicYear, formatThaiDate, formatRiRefNo, getDisplayBookNumber } from "../utils/academicYear";
 import { isFirebaseConfigured, db, auth } from "../services/db";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import {
@@ -274,7 +274,9 @@ export default function IncomingDocuments({
     const hasDup = documents.some((d) => {
       if (d.academicYear !== formAcademicYear) return false;
       if (editingDoc && d.id === editingDoc.id) return false;
-      const normExisting = (d.bookNumber || d.docNumber || d.number || "").replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+      const existingBookNo = getDisplayBookNumber(d);
+      if (existingBookNo === "-") return false;
+      const normExisting = existingBookNo.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
       return normExisting === normInput;
     });
 
@@ -313,7 +315,8 @@ export default function IncomingDocuments({
     setEditingDoc(docItem);
     setFormRiRefNo(formatRiRefNo(docItem.riRefNo || docItem.vopId || docItem.number, docItem.academicYear));
     setFormReceiveDate(docItem.receiveDate || docItem.receivedDate || new Date().toISOString().split("T")[0]);
-    setDocNumber(docItem.docNumber || docItem.bookNumber || "");
+    const initialBookNum = getDisplayBookNumber(docItem);
+    setDocNumber(initialBookNum === "-" ? "" : initialBookNum);
     setFormSender(docItem.sender || docItem.senderOutside || "");
     setFormDepartment(docItem.department || "");
     setFormSubject(docItem.subject || docItem.title || "");
@@ -380,15 +383,16 @@ export default function IncomingDocuments({
 
     const todayStr = new Date().toISOString();
     const currentUserEmail = auth?.currentUser?.email || "kittiwat.p@bu.ac.th";
+    const cleanedDocNo = docNumber.trim().replace(/^วพ[\.\s\/\-]*/i, "").replace(/^0+([1-9]\d*\/)/, "$1");
 
     const payload: Document = {
       id: editingDoc ? editingDoc.id : `inbox-${Date.now()}`,
       category: DocumentCategory.INBOX,
       title: formSubject.trim(),
       subject: formSubject.trim(),
-      number: docNumber.trim() || formRiRefNo,
-      bookNumber: docNumber.trim(),
-      docNumber: docNumber.trim(),
+      number: cleanedDocNo || (editingDoc?.number ? editingDoc.number : formRiRefNo),
+      bookNumber: cleanedDocNo,
+      docNumber: cleanedDocNo,
       sender: formSender.trim() || "ไม่ได้ระบุผู้ส่ง",
       senderOutside: formSender.trim(),
       senderInside: "",
@@ -1140,7 +1144,7 @@ Email: kittiwat.p@bu.ac.th
       const searchLower = searchTerm.toLowerCase();
       const riRef = formatRiRefNo(item.riRefNo || item.vopId || item.number, item.academicYear).toLowerCase();
       const subject = (item.subject || item.title || "").toLowerCase();
-      const bookNo = (item.docNumber || item.bookNumber || item.number || "").toLowerCase();
+      const bookNo = getDisplayBookNumber(item).toLowerCase();
       const department = (item.department || "").toLowerCase();
       const sender = (item.sender || "").toLowerCase();
       const receiver = (mergedOut.receiver || "").toLowerCase();
@@ -1366,8 +1370,8 @@ Email: kittiwat.p@bu.ac.th
                       </td>
 
                       {/* Column 3: เลขที่หนังสือ (INPUT DATA ZONE - centered) */}
-                      <td className="px-3.5 py-3 text-center font-mono bg-sky-50 text-slate-600 whitespace-nowrap max-w-[125px] truncate align-top" title={item.docNumber || item.bookNumber || item.number}>
-                        {item.docNumber || item.bookNumber || item.number || "-"}
+                      <td className="px-3.5 py-3 text-center font-mono bg-sky-50 text-slate-600 whitespace-nowrap max-w-[125px] truncate align-top" title={getDisplayBookNumber(item)}>
+                        {getDisplayBookNumber(item)}
                       </td>
 
                       {/* Column 4: ผู้ส่ง (INPUT DATA ZONE - text-left) */}

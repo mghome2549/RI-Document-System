@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory } from "../types";
-import { getAcademicYear, formatThaiDate, isReceivedMoreThan5DaysAgo, formatRiRefNo } from "../utils/academicYear";
+import { getAcademicYear, formatThaiDate, isReceivedMoreThan5DaysAgo, formatRiRefNo, getDisplayBookNumber } from "../utils/academicYear";
 import {
   Search,
   Plus,
@@ -86,7 +86,9 @@ export default function InboxTable({
       if (d.academicYear !== formAcademicYear) return false;
       if (d.category !== DocumentCategory.INBOX) return false;
       if (editingDoc && d.id === editingDoc.id) return false;
-      const normExisting = (d.bookNumber || d.number || "").replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+      const existingBookNo = getDisplayBookNumber(d);
+      if (existingBookNo === "-") return false;
+      const normExisting = existingBookNo.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
       return normExisting === normInput;
     });
 
@@ -471,7 +473,7 @@ export default function InboxTable({
                       
                       {/* Column 3: เลขที่หนังสือ */}
                       <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-slate-700">
-                        {doc.bookNumber || doc.number || <span className="text-slate-400 font-normal italic">-</span>}
+                        {getDisplayBookNumber(doc) !== "-" ? getDisplayBookNumber(doc) : <span className="text-slate-400 font-normal italic">-</span>}
                       </td>
                       
                       {/* Column 4: ผู้ส่ง */}
