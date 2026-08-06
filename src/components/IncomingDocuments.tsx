@@ -383,14 +383,14 @@ export default function IncomingDocuments({
 
     const todayStr = new Date().toISOString();
     const currentUserEmail = auth?.currentUser?.email || "kittiwat.p@bu.ac.th";
-    const cleanedDocNo = docNumber.trim().replace(/^วพ[\.\s\/\-]*/i, "").replace(/^0+([1-9]\d*\/)/, "$1");
+    const cleanedDocNo = docNumber.trim();
 
     const payload: Document = {
       id: editingDoc ? editingDoc.id : `inbox-${Date.now()}`,
       category: DocumentCategory.INBOX,
       title: formSubject.trim(),
       subject: formSubject.trim(),
-      number: cleanedDocNo || (editingDoc?.number ? editingDoc.number : formRiRefNo),
+      number: editingDoc?.number ? editingDoc.number : (editingDoc?.vopId || editingDoc?.riRefNo || formRiRefNo),
       bookNumber: cleanedDocNo,
       docNumber: cleanedDocNo,
       sender: formSender.trim() || "ไม่ได้ระบุผู้ส่ง",

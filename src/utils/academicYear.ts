@@ -137,31 +137,42 @@ export function formatRiRefNo(id: string | undefined | null, defaultYear?: numbe
 
 /**
  * Extract and format "เลขที่หนังสือ" (Book / Document Number) for display and export.
- * Strips any leading "วพ." or "วพ " or "วพ/" or "วพ-" prefix so it doesn't duplicate "เลขที่ วพ."
+ * Returns only explicit external document numbers entered by Admin (d.docNumber or d.bookNumber).
+ * NEVER falls back to internal "เลขที่ วพ." (d.number, d.vopId, d.riRefNo).
  */
 export function getDisplayBookNumber(d: any): string {
   if (!d) return "-";
 
-  // Check explicit docNumber or bookNumber fields first, fallback to number
+  // Check explicit docNumber or bookNumber fields ONLY
   const rawDocNumber = typeof d.docNumber === "string" ? d.docNumber.trim() : "";
   const rawBookNumber = typeof d.bookNumber === "string" ? d.bookNumber.trim() : "";
-  const rawNumber = typeof d.number === "string" ? d.number.trim() : "";
 
-  let candidate = rawDocNumber || rawBookNumber;
-
-  if (!candidate && rawNumber) {
-    candidate = rawNumber;
-  }
+  const candidate = rawDocNumber || rawBookNumber;
 
   if (!candidate) return "-";
 
-  // Strip leading "วพ." / "วพ " / "วพ/" / "วพ-"
-  let cleaned = candidate.replace(/^วพ[\.\s\/\-]*/i, "").trim();
+  // Normalize candidate for comparison with internal วพ. reference numbers
+  const candidateNorm = candidate.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
 
-  // If after stripping "วพ." we get something like "065/2568", convert "065/2568" -> "65/2568"
-  cleaned = cleaned.replace(/^0+([1-9]\d*\/)/, "$1");
+  if (!candidateNorm) return "-";
 
-  if (!cleaned) return "-";
+  // Build internal วพ. reference variations to compare against
+  const internalVop = typeof d.vopId === "string" ? d.vopId : "";
+  const internalRi = typeof d.riRefNo === "string" ? d.riRefNo : "";
+  const internalFormatted = formatRiRefNo(internalRi || internalVop || d.number, d.academicYear);
 
-  return cleaned;
+  const normVop = internalVop.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+  const normRi = internalRi.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+  const normFormatted = internalFormatted.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
+
+  // If candidate matches internal วพ. reference number, treat as empty external book number
+  if (
+    (normFormatted && candidateNorm === normFormatted) ||
+    (normVop && candidateNorm === normVop) ||
+    (normRi && candidateNorm === normRi)
+  ) {
+    return "-";
+  }
+
+  return candidate;
 }
