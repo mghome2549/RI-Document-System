@@ -542,10 +542,6 @@ export default function Dashboard({
 
   // Count of outbox documents that do not have a recipient name specified (not yet dispatched / sent out)
   const notExportedOutboxCount = inboxDocs.filter(docItem => {
-    const currentStatus = docItem.vpRouting?.status || docItem.status || "อยู่ระหว่างพิจารณา";
-    const isApprovedOrSigned = currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
-    if (!isApprovedOrSigned) return false;
-
     const isInstitutionalReceiver = (name?: string) => {
       if (!name) return false;
       const n = name.trim();
@@ -599,8 +595,8 @@ export default function Dashboard({
       sendDate = match.sendDate || match.dispatchDate || "";
     }
 
-    const hasNoOutgoingInfo = !sendDate && !receiver;
-    return hasNoOutgoingInfo;
+    const hasNoReceiver = !receiver || receiver.trim() === "" || receiver.trim() === "-";
+    return hasNoReceiver;
   }).length;
 
   // Count unique incoming documents where status is "พิจารณาแล้ว", "อนุมัติ", or "ลงนามแล้ว"

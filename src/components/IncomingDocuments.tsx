@@ -1111,9 +1111,8 @@ Email: kittiwat.p@bu.ac.th
         return false;
       }
     } else if (activeWorkflowTab === "pending_outgoing") {
-      const isApprovedOrSigned = currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
-      const hasNoOutgoingInfo = !mergedOut.sendDate && !mergedOut.receiver;
-      if (!isApprovedOrSigned || !hasNoOutgoingInfo) {
+      const hasNoReceiver = !mergedOut.receiver || mergedOut.receiver.trim() === "" || mergedOut.receiver.trim() === "-";
+      if (!hasNoReceiver) {
         return false;
       }
     } else {
@@ -1253,27 +1252,42 @@ Email: kittiwat.p@bu.ac.th
           })
         </button>
 
-        <button
-          onClick={() => {
-            setActiveWorkflowTab("pending_outgoing");
-            setCurrentPage(1);
-          }}
-          className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all duration-150 cursor-pointer ${
-            activeWorkflowTab === "pending_outgoing"
-              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm scale-[1.01]"
-              : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50/55"
-          }`}
-        >
-          📤 รอส่งออกปลายทาง ({
-            mergedLedgerList.filter(({ doc: item, mergedOut }) => {
-              if (selectedFilterYear !== "all" && String(item.academicYear) !== String(selectedFilterYear)) return false;
-              const currentStatus = item.vpRouting?.status || item.status || "อยู่ระหว่างพิจารณา";
-              const isApprovedOrSigned = currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
-              const hasNoOutgoingInfo = !mergedOut.sendDate && !mergedOut.receiver;
-              return isApprovedOrSigned && hasNoOutgoingInfo;
-            }).length
-          })
-        </button>
+        {(() => {
+          const pendingOutgoingCount = mergedLedgerList.filter(({ doc: item, mergedOut }) => {
+            if (selectedFilterYear !== "all" && String(item.academicYear) !== String(selectedFilterYear)) return false;
+            const hasNoReceiver = !mergedOut.receiver || mergedOut.receiver.trim() === "" || mergedOut.receiver.trim() === "-";
+            return hasNoReceiver;
+          }).length;
+
+          return (
+            <button
+              onClick={() => {
+                setActiveWorkflowTab("pending_outgoing");
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+                activeWorkflowTab === "pending_outgoing"
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm scale-[1.01]"
+                  : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50/55"
+              }`}
+            >
+              <span>📤 รอส่งออกปลายทาง</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10.5px] font-black transition-all ${
+                  pendingOutgoingCount > 0
+                    ? activeWorkflowTab === "pending_outgoing"
+                      ? "bg-white text-indigo-700 shadow-xs"
+                      : "bg-rose-500 text-white animate-pulse shadow-xs"
+                    : activeWorkflowTab === "pending_outgoing"
+                    ? "bg-indigo-500 text-white"
+                    : "bg-indigo-100 text-indigo-800"
+                }`}
+              >
+                {pendingOutgoingCount}
+              </span>
+            </button>
+          );
+        })()}
       </div>
 
       {/* Main Ledger Table Board (Exactly 11 Columns Re-aligned Matrix) */}
@@ -1443,7 +1457,14 @@ Email: kittiwat.p@bu.ac.th
 
                       {/* Column 10: ผู้รับ (OUTGOING SHIPMENT ZONE - text-left) */}
                       <td className="px-3.5 py-3 text-left bg-purple-50 font-medium text-slate-800 whitespace-normal break-words min-w-[140px] max-w-[220px] align-top" title={mergedOut.receiver}>
-                        {mergedOut.receiver || "-"}
+                        {mergedOut.receiver && mergedOut.receiver.trim() !== "-" ? (
+                          <span>{mergedOut.receiver}</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-semibold text-rose-600 bg-rose-50/80 border border-rose-200/80 rounded-md shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                            ยังไม่ได้ระบุผู้รับ
+                          </span>
+                        )}
                       </td>
 
                       {/* Column 11: หน่วยงานออก (OUTGOING SHIPMENT ZONE - text-left) */}
