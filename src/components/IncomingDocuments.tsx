@@ -441,8 +441,8 @@ export default function IncomingDocuments({
     }
 
     // Direct automated email composition, PDF attachment uploads, and backend transaction execution simultaneously
-    // ส่งอีเมลจำกัดเฉพาะประเภทเอกสาร "เอกสาร" (Paper/กระดาษ) เท่านั้น
-    if (formRecipientEmail.trim() && formVpDocType === "เอกสาร") {
+    // ส่งอีเมลแจ้งผลการพิจารณา สำหรับทั้งเอกสารประเภท "เอกสาร" (Paper) และ "e-mail"
+    if (formRecipientEmail.trim()) {
       const riRefNoFinal = editingDoc
         ? formatRiRefNo(editingDoc.riRefNo || editingDoc.vopId || editingDoc.number, editingDoc.academicYear)
         : "(จะสร้างเลขที่อ้างอิง วพ. อัตโนมัติเมื่อกดบันทึก)";
@@ -1792,25 +1792,14 @@ Email: kittiwat.p@bu.ac.th
                     <input
                       id="formRecipientEmail-input"
                       type="email"
-                      value={formVpDocType === "เอกสาร" ? formRecipientEmail : ""}
+                      value={formRecipientEmail}
                       onChange={(e) => setFormRecipientEmail(e.target.value)}
-                      disabled={formVpDocType !== "เอกสาร"}
-                      placeholder={formVpDocType === "เอกสาร" ? "เช่น owner@bu.ac.th" : "ปิดการส่งอีเมลสำหรับประเภท e-mail"}
-                      className={`w-full text-xs h-9 px-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                        formVpDocType !== "เอกสาร" 
-                          ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed" 
-                          : "bg-white text-slate-800 border-slate-200"
-                      }`}
+                      placeholder="เช่น owner@bu.ac.th"
+                      className="w-full text-xs h-9 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
                     />
-                    {formVpDocType !== "เอกสาร" ? (
-                      <span className="text-[10px] text-amber-600 block mt-1 font-semibold font-sans">
-                        ⚠️ ระบบจะส่งอีเมลเฉพาะเอกสาร "Paper/กระดาษ" เท่านั้น (ประเภท e-mail จะไม่ส่งซ้ำซ้อน)
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-450 block mt-1 font-sans">
-                        📧 กรอกอีเมลเพื่อส่งแจ้งเตือนผลพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว
-                      </span>
-                    )}
+                    <span className="text-[10px] text-slate-450 block mt-1 font-sans">
+                      📧 กรอกอีเมลเพื่อส่งแจ้งเตือนผลพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว (รองรับทั้งเอกสารประเภท Paper และ e-mail)
+                    </span>
                   </div>
 
                   {/* Input 2: PDF File Attachment */}
