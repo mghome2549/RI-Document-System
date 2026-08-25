@@ -5,7 +5,7 @@ import jsPDF from "jspdf";
 import { db, auth, isFirebaseConfigured } from "../services/db";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory } from "../types";
-import { formatThaiDate, isReceivedMoreThan5DaysAgo, getAcademicYearsRange, formatRiRefNo } from "../utils/academicYear";
+import { formatThaiDate, isReceivedMoreThan5DaysAgo, isReceivedMoreThan5WorkingDaysAgo, getWorkingDaysElapsed, getAcademicYearsRange, formatRiRefNo } from "../utils/academicYear";
 import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, FileText, Layers, CalendarDays, ExternalLink, Mail, File } from "lucide-react";
 
 interface DashboardProps {
@@ -505,24 +505,10 @@ export default function Dashboard({
     }
   });
 
-  // Helper to calculate days pending/stuck
+  // Helper to calculate days pending/stuck (working days)
   const getDaysPending = (receiveDateStr?: string) => {
     if (!receiveDateStr) return 0;
-    const receivedDate = new Date(receiveDateStr);
-    if (isNaN(receivedDate.getTime())) return 0;
-    
-    // Create Date object representing today (at midnight)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Set received date to midnight for pure day calculations
-    const received = new Date(receivedDate);
-    received.setHours(0, 0, 0, 0);
-    
-    const diffTime = today.getTime() - received.getTime();
-    if (diffTime <= 0) return 0;
-    
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return getWorkingDaysElapsed(receiveDateStr);
   };
 
   // Helper to check if a document is completed
@@ -610,16 +596,13 @@ export default function Dashboard({
     return currentStatus === "อยู่ระหว่างพิจารณา";
   }).length;
 
-  // Computed SLA delayed incoming count: Pending and received > 5 calendar days ago
+  // Computed SLA delayed incoming count: Pending and received > 5 working days ago
   const slaDelayedCount = inboxDocs.filter(d => {
     const currentStatus = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
     if (currentStatus !== "อยู่ระหว่างพิจารณา") return false;
     const baseDateStr = d.receiveDate || d.receivedDate || d.createdAt;
     if (!baseDateStr) return false;
-    const baseDate = new Date(baseDateStr);
-    if (isNaN(baseDate.getTime())) return false;
-    const diffTime = new Date().getTime() - baseDate.getTime();
-    return diffTime > 5 * 24 * 60 * 60 * 1000;
+    return isReceivedMoreThan5WorkingDaysAgo(baseDateStr);
   }).length;
 
   const successRate = inboxDocs.length > 0
@@ -954,7 +937,7 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* KPI 5: ล่าช้าเกิน 5 วัน */}
+        {/* KPI 5: ล่าช้าเกิน 5 วันทำการ */}
         <div 
           onClick={() => {
             if (setLedgerWorkflowTab) setLedgerWorkflowTab("all");
@@ -965,7 +948,7 @@ export default function Dashboard({
         >
           <div className="flex items-start justify-between w-full">
             <div className="min-w-0 flex-1">
-              <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-widest block truncate overflow-hidden">ล่าช้าเกิน 5 วัน</span>
+              <span className="text-[10px] font-extrabold text-rose-600 uppercase tracking-widest block truncate overflow-hidden">ล่าช้าเกิน 5 วันทำการ</span>
               <span className="text-lg md:text-xl font-bold font-mono text-rose-950 mt-1 block">
                 {slaDelayedCount} <span className="text-xs font-bold text-rose-800/60 font-sans">รายการ</span>
               </span>
@@ -1241,7 +1224,7 @@ export default function Dashboard({
                             const days = getDaysPending(doc.receivedDate || doc.receiveDate);
                             return (
                               <span className="text-rose-700 font-extrabold bg-rose-100/80 px-1.5 py-0.5 rounded border border-rose-300">
-                                [ ค้างอยู่ {days} วัน ]
+                                [ ค้างอยู่ {days} วันทำการ ]
                               </span>
                             );
                           })()}
@@ -1346,7 +1329,7 @@ export default function Dashboard({
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-center">
                     <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">ค้างเกินกำหนด (SLA)</span>
                     <span className="text-xl font-bold font-mono text-rose-700 block mt-1">{slaDelayedCount}</span>
-                    <span className="text-[9px] text-rose-500 font-bold">เกินกำหนด 5 วัน</span>
+                    <span className="text-[9px] text-rose-500 font-bold">เกินกำหนด 5 วันทำการ</span>
                   </div>
                 </div>
 

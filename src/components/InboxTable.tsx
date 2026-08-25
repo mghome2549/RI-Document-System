@@ -410,7 +410,7 @@ export default function InboxTable({
               <option value="ลงนามแล้ว">ลงนามแล้ว</option>
               <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
               <option value="ดำเนินการแล้ว/ส่งออกแล้ว">ดำเนินการแล้ว/ส่งออกแล้ว</option>
-              <option value="late">เกินเวลาพิจารณา (Late {`>`} 5 วัน)</option>
+              <option value="late">เกินเวลาพิจารณา (Late {`>`} 5 วันทำการ)</option>
             </select>
           </div>
 
@@ -530,7 +530,7 @@ export default function InboxTable({
                           {lateRow && (
                             <span className="px-1.5 py-0.5 text-[9px] rounded font-extrabold bg-red-100 text-red-700 border border-red-300 uppercase animate-pulse flex items-center gap-0.5">
                               <AlertTriangle size={8} />
-                              <span>Late (เกิน 5 วัน)</span>
+                              <span>Late (เกิน 5 วันทำการ)</span>
                             </span>
                           )}
 

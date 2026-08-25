@@ -3,7 +3,7 @@ import emailjs from "emailjs-com";
 import { saveDocumentLog } from "../services/supabaseClient";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory, VpRouting } from "../types";
-import { getAcademicYear, formatThaiDate, formatRiRefNo, getDisplayBookNumber } from "../utils/academicYear";
+import { getAcademicYear, formatThaiDate, formatRiRefNo, getDisplayBookNumber, isReceivedMoreThan5WorkingDaysAgo } from "../utils/academicYear";
 import { isFirebaseConfigured, db, auth } from "../services/db";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import {
@@ -1121,10 +1121,7 @@ Email: kittiwat.p@bu.ac.th
           if (currentStatus !== "อยู่ระหว่างพิจารณา") return false;
           const baseDateStr = d.receiveDate || d.receivedDate || d.createdAt;
           if (!baseDateStr) return false;
-          const baseDate = new Date(baseDateStr);
-          if (isNaN(baseDate.getTime())) return false;
-          const diffTime = new Date().getTime() - baseDate.getTime();
-          return diffTime > 5 * 24 * 60 * 60 * 1000;
+          return isReceivedMoreThan5WorkingDaysAgo(baseDateStr);
         };
         if (!isDelayed(item)) {
           return false;
@@ -1200,7 +1197,7 @@ Email: kittiwat.p@bu.ac.th
               <option value="อนุมัติ">อนุมัติ</option>
               <option value="ลงนามแล้ว">ลงนามแล้ว</option>
               <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
-              <option value="delayed">ล่าช้าเกิน 5 วัน</option>
+              <option value="delayed">ล่าช้าเกิน 5 วันทำการ</option>
             </select>
           </div>
 

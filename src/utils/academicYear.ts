@@ -76,24 +76,51 @@ export function isReceivedMoreThan7DaysAgo(receivedDateStr: string): boolean {
 }
 
 /**
- * Checks if a document was received more than 5 days ago
+ * Calculates the number of working days (วันทำการ - Mon to Fri) elapsed between two dates.
+ * Excludes weekends (Saturday and Sunday).
+ */
+export function getWorkingDaysElapsed(startDateStr: string, endDateStr?: string): number {
+  if (!startDateStr) return 0;
+  const start = new Date(startDateStr);
+  if (isNaN(start.getTime())) return 0;
+
+  const end = endDateStr ? new Date(endDateStr) : new Date();
+  if (isNaN(end.getTime())) return 0;
+
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+
+  const target = new Date(end);
+  target.setHours(0, 0, 0, 0);
+
+  if (target <= cur) return 0;
+
+  let workingDays = 0;
+  cur.setDate(cur.getDate() + 1);
+  while (cur <= target) {
+    const dayOfWeek = cur.getDay(); // 0 = Sun, 6 = Sat
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  return workingDays;
+}
+
+/**
+ * Checks if a document was received more than 5 working days ago (ล่าช้าเกิน 5 วันทำการ)
+ */
+export function isReceivedMoreThan5WorkingDaysAgo(receivedDateStr: string): boolean {
+  if (!receivedDateStr) return false;
+  return getWorkingDaysElapsed(receivedDateStr) > 5;
+}
+
+/**
+ * Checks if a document was received more than 5 working days ago (ล่าช้าเกิน 5 วันทำการ)
  */
 export function isReceivedMoreThan5DaysAgo(receivedDateStr: string): boolean {
-  if (!receivedDateStr) return false;
-  const receivedDate = new Date(receivedDateStr);
-  if (isNaN(receivedDate.getTime())) return false;
-  
-  // Create Date object representing today (at midnight)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Set received date to midnight for pure day calculations
-  const received = new Date(receivedDate);
-  received.setHours(0, 0, 0, 0);
-  
-  const diffTime = today.getTime() - received.getTime();
-  const diffDays = diffTime / (1000 * 60 * 60 * 24);
-  return diffDays > 5;
+  return isReceivedMoreThan5WorkingDaysAgo(receivedDateStr);
 }
 
 /**
