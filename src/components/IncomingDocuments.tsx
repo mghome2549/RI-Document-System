@@ -1649,10 +1649,9 @@ Email: kittiwat.p@bu.ac.th
                     onSelect={(prof) => {
                       setFormSender(prof.name);
                       setFormDepartment(prof.department);
-                      setFormRecipientEmail(prof.email);
                     }}
                     professors={professors}
-                    placeholder="พิมพ์ชื่ออาจารย์เพื่อกรองและกรอกข้อมูลหน่วยงานและอีเมลอัจฉริยะ..."
+                    placeholder="พิมพ์ชื่ออาจารย์เพื่อกรองและกรอกข้อมูลหน่วยงานสังกัด..."
                     required={true}
                   />
 
@@ -1766,10 +1765,16 @@ Email: kittiwat.p@bu.ac.th
                     id="formReceiver-input"
                     label="ผู้รับปลายทาง (Receiver Name)"
                     value={formReceiver}
-                    onChange={(val) => setFormReceiver(val)}
+                    onChange={(val) => {
+                      setFormReceiver(val);
+                      if (!val.trim()) {
+                        setFormRecipientEmail("");
+                      }
+                    }}
                     onSelect={(prof) => {
                       setFormReceiver(prof.name);
                       setFormOutgoingDepartment(prof.department);
+                      setFormRecipientEmail(prof.email);
                     }}
                     professors={professors}
                     placeholder="พิมพ์ชื่ออาจารย์เพื่อเลือกเป็นผู้รับและกรอกข้อมูลอัจฉริยะ..."
