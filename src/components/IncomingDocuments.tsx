@@ -3,7 +3,7 @@ import emailjs from "emailjs-com";
 import { saveDocumentLog } from "../services/supabaseClient";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory, VpRouting } from "../types";
-import { getAcademicYear, formatThaiDate, formatRiRefNo, getDisplayBookNumber, isReceivedMoreThan5WorkingDaysAgo } from "../utils/academicYear";
+import { getAcademicYear, formatThaiDate, formatRiRefNo, getDisplayBookNumber, isReceivedMoreThan5WorkingDaysAgo, extractRiSeqNumber } from "../utils/academicYear";
 import { isFirebaseConfigured, db, auth } from "../services/db";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import {
@@ -18,7 +18,17 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   ExternalLink,
-  Mail
+  Mail,
+  ArrowUpDown,
+  ArrowDown,
+  ArrowUp,
+  Sparkles,
+  Copy,
+  Check,
+  ChevronsLeft,
+  ChevronsRight,
+  Hash,
+  BookmarkCheck
 } from "lucide-react";
 import { Professor, fetchProfessors } from "../services/professors";
 import AutocompleteInput from "./AutocompleteInput";
@@ -165,10 +175,15 @@ export default function IncomingDocuments({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
-  // Reset pagination state when filters change to avoid empty-state ghosts
+  // Sorting Controls: Default to "desc" (Newest first / วพ. ล่าสุดขึ้นก่อน เพื่อให้ไม่ต้องเลื่อนลงไปล่างสุด)
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [sortField, setSortField] = useState<"riRef" | "date">("riRef");
+  const [copiedLatest, setCopiedLatest] = useState(false);
+
+  // Reset pagination state when filters or sorting change to avoid empty-state ghosts
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, activeWorkflowTab, selectedFilterYear]);
+  }, [searchTerm, statusFilter, activeWorkflowTab, selectedFilterYear, sortOrder, sortField]);
 
   // Load Legacy Outgoing Documents for Hybrid Merge (Historical backward compatibility read guard)
   useEffect(() => {
@@ -1097,6 +1112,30 @@ Email: kittiwat.p@bu.ac.th
 
   const mergedLedgerList = buildMergedLedger();
 
+  // Calculate latest and next RI document numbers for the active academic year
+  const targetAcademicYear = selectedFilterYear === "all" ? getAcademicYear() : Number(selectedFilterYear);
+
+  const relevantInboxDocs = baseDocs.filter(d => 
+    selectedFilterYear === "all" || String(d.academicYear) === String(selectedFilterYear)
+  );
+
+  let maxSeq = 0;
+  let latestDocItem: Document | null = null;
+
+  relevantInboxDocs.forEach(d => {
+    const seq = extractRiSeqNumber(d.riRefNo || d.vopId || d.number, d.runningNumber);
+    if (seq > maxSeq) {
+      maxSeq = seq;
+      latestDocItem = d;
+    }
+  });
+
+  const latestRiRefNo = maxSeq > 0 
+    ? `วพ. ${String(maxSeq).padStart(3, "0")}/${latestDocItem?.academicYear || targetAcademicYear}`
+    : "-";
+
+  const nextRiRefNo = `วพ. ${String(maxSeq + 1).padStart(3, "0")}/${targetAcademicYear}`;
+
   // Filter list with local search and status filters
   const filteredList = mergedLedgerList.filter(({ doc: item, mergedOut }) => {
     // Academic year filter
@@ -1158,16 +1197,126 @@ Email: kittiwat.p@bu.ac.th
     return true;
   });
 
+  // Sort filtered items according to sortField and sortOrder
+  const sortedFilteredList = [...filteredList].sort((a, b) => {
+    const docA = a.doc;
+    const docB = b.doc;
+
+    if (sortField === "date") {
+      const dateA = docA.receiveDate || docA.receivedDate || docA.createdAt || "";
+      const dateB = docB.receiveDate || docB.receivedDate || docB.createdAt || "";
+      if (dateA && dateB && dateA !== dateB) {
+        return sortOrder === "desc" ? dateB.localeCompare(dateA) : dateA.localeCompare(dateB);
+      }
+    }
+
+    const seqA = extractRiSeqNumber(docA.riRefNo || docA.vopId || docA.number, docA.runningNumber);
+    const seqB = extractRiSeqNumber(docB.riRefNo || docB.vopId || docB.number, docB.runningNumber);
+
+    if (seqA !== seqB) {
+      return sortOrder === "desc" ? seqB - seqA : seqA - seqB;
+    }
+
+    const dateA = docA.receiveDate || docA.receivedDate || docA.createdAt || "";
+    const dateB = docB.receiveDate || docB.receivedDate || docB.createdAt || "";
+    return sortOrder === "desc" ? dateB.localeCompare(dateA) : dateA.localeCompare(dateB);
+  });
+
   // Pagination Calculations
-  const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredList.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
-  const paginatedList = filteredList.slice(startIndex, startIndex + pageSize);
+  const paginatedList = sortedFilteredList.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div id="ri-ledger-view-v2" className="space-y-6 font-sans">
+    <div id="ri-ledger-view-v2" className="space-y-5 font-sans">
+
+      {/* Quick Status Bar: เลขที่ วพ. ล่าสุด & เลขที่ถัดไป (ไม่ต้องเลื่อนลงล่าง) */}
+      <div className="bg-gradient-to-r from-[#003366] via-[#004080] to-[#0A2540] text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-700/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          {/* Latest Number Chip */}
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/15">
+            <div className="w-8 h-8 rounded-lg bg-[#FFCC00] text-[#003366] flex items-center justify-center font-black text-sm shadow-xs">
+              <Hash size={18} />
+            </div>
+            <div>
+              <div className="text-[10px] text-sky-200 font-semibold uppercase tracking-wider">
+                เลขที่ วพ. ล่าสุดในระบบ
+              </div>
+              <div className="text-sm sm:text-base font-extrabold font-mono tracking-tight text-white flex items-center gap-2">
+                <span>{latestRiRefNo}</span>
+                {latestRiRefNo !== "-" && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(latestRiRefNo);
+                      setCopiedLatest(true);
+                      setTimeout(() => setCopiedLatest(false), 2000);
+                    }}
+                    className="p-1 hover:bg-white/20 rounded text-sky-200 hover:text-white transition cursor-pointer"
+                    title="คัดลอกเลข วพ. ล่าสุด"
+                  >
+                    {copiedLatest ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Next Expected Number Chip */}
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/15">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-sm shadow-xs">
+              <Sparkles size={18} />
+            </div>
+            <div>
+              <div className="text-[10px] text-emerald-200 font-semibold uppercase tracking-wider">
+                เลขที่ วพ. ฉบับถัดไป (Next)
+              </div>
+              <div className="text-sm sm:text-base font-extrabold font-mono tracking-tight text-emerald-300">
+                {nextRiRefNo}
+              </div>
+            </div>
+          </div>
+
+          {latestDocItem && (
+            <div className="hidden xl:block text-xs text-sky-100/80 pl-2 border-l border-white/15 max-w-[280px]">
+              <div className="text-[10px] text-sky-300 font-semibold">
+                เรื่องล่าสุด ({latestDocItem.receiveDate ? formatThaiDate(latestDocItem.receiveDate) : "-"}):
+              </div>
+              <div className="truncate font-medium text-white text-[11px]" title={latestDocItem.subject || latestDocItem.title}>
+                {latestDocItem.subject || latestDocItem.title}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Action & Sort Toggle */}
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end shrink-0">
+          {/* Sort Toggle Button */}
+          <button
+            onClick={() => {
+              setSortOrder(prev => (prev === "desc" ? "asc" : "desc"));
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition cursor-pointer border border-white/20 active:scale-98"
+            title="คลิกเพื่อสลับการเรียงลำดับรายการในตาราง (ล่าสุด ↔ เก่าสุด)"
+          >
+            <ArrowUpDown size={14} className="text-amber-300" />
+            <span>เรียง: {sortOrder === "desc" ? "ล่าสุดขึ้นก่อน (วพ. ล่าสุด ⬇)" : "เก่าสุดขึ้นก่อน (วพ. 001 ⬆)"}</span>
+          </button>
+
+          {isAdmin && (
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-2 px-4 py-2 bg-[#FFCC00] hover:bg-amber-400 text-[#003366] text-xs font-black rounded-xl shadow-sm transition cursor-pointer active:scale-98"
+            >
+              <Plus size={15} />
+              <span>ลงรับเอกสาร ({nextRiRefNo})</span>
+            </button>
+          )}
+        </div>
+      </div>
       
       {/* Search and Action Ribbon */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 outline-none flex flex-col md:flex-row items-center gap-4 shadow-sm">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 outline-none flex flex-col md:flex-row items-center gap-3 shadow-sm">
         <div className="relative flex-1 w-full">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pr-2 pointer-events-none text-slate-400">
             <Search size={16} />
@@ -1181,7 +1330,30 @@ Email: kittiwat.p@bu.ac.th
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0">
+          {/* Sort Order Selector inside ribbon */}
+          <div className="flex items-center gap-1.5 text-xs bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+            <span className="font-semibold text-slate-500 pl-1 flex items-center gap-1">
+              <ArrowUpDown size={12} />
+              <span>การเรียง:</span>
+            </span>
+            <select
+              value={`${sortField}_${sortOrder}`}
+              onChange={(e) => {
+                const [f, o] = e.target.value.split("_") as ["riRef" | "date", "desc" | "asc"];
+                setSortField(f);
+                setSortOrder(o);
+                setCurrentPage(1);
+              }}
+              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="riRef_desc">เลขที่ วพ. ล่าสุดขึ้นก่อน (Newest ⬇)</option>
+              <option value="riRef_asc">เลขที่ วพ. เก่าสุดขึ้นก่อน (001 ⬆)</option>
+              <option value="date_desc">วันที่รับล่าสุดขึ้นก่อน</option>
+              <option value="date_asc">วันที่รับเก่าสุดขึ้นก่อน</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-1.5 text-xs bg-slate-100 p-1.5 rounded-xl border border-slate-200">
             <span className="font-semibold text-slate-500 pl-1 flex items-center gap-1">
               <SlidersHorizontal size={12} />
@@ -1303,7 +1475,7 @@ Email: kittiwat.p@bu.ac.th
             </p>
           </div>
           <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">
-            ข้อมูลที่แสดงจำนวน: {filteredList.length} รายการ
+            ข้อมูลที่แสดงจำนวน: {sortedFilteredList.length} รายการ ({sortOrder === "desc" ? "เรียงล่าสุด ➔ เก่าสุด" : "เรียงเก่าสุด ➔ ล่าสุด"})
           </span>
         </div>
 
@@ -1314,11 +1486,57 @@ Email: kittiwat.p@bu.ac.th
               {/* Exact 12 columns header row mapping (Without ZONE blocks header row) */}
               <tr className="bg-slate-50 text-[10.5px] font-bold text-slate-600 border-b border-slate-200 divide-x divide-slate-150">
                 {/* Zone 1: Incoming Data Column Header */}
-                <th className="px-3.5 py-3 min-w-[110px] bg-sky-50 text-[#003366] text-center sticky left-0 z-40 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-bold">
-                  เลขที่ วพ.
+                <th
+                  onClick={() => {
+                    if (sortField === "riRef") {
+                      setSortOrder(prev => (prev === "desc" ? "asc" : "desc"));
+                    } else {
+                      setSortField("riRef");
+                      setSortOrder("desc");
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className="px-3.5 py-3 min-w-[125px] bg-sky-50 text-[#003366] text-center sticky left-0 z-40 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] font-bold cursor-pointer hover:bg-sky-100 transition select-none group"
+                  title="คลิกเพื่อสลับการเรียงลำดับตามเลขที่ วพ. (ล่าสุด ↔ เก่าสุด)"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>เลขที่ วพ.</span>
+                    {sortField === "riRef" ? (
+                      sortOrder === "desc" ? (
+                        <span className="text-blue-700 font-extrabold text-[10px]">▼ ล่าสุด</span>
+                      ) : (
+                        <span className="text-blue-700 font-extrabold text-[10px]">▲ 001</span>
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </div>
                 </th>
-                <th className="px-3.5 py-3 min-w-[90px] bg-sky-50 text-[#003366] text-center font-bold">
-                  วันที่รับ
+                <th
+                  onClick={() => {
+                    if (sortField === "date") {
+                      setSortOrder(prev => (prev === "desc" ? "asc" : "desc"));
+                    } else {
+                      setSortField("date");
+                      setSortOrder("desc");
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className="px-3.5 py-3 min-w-[95px] bg-sky-50 text-[#003366] text-center font-bold cursor-pointer hover:bg-sky-100 transition select-none group"
+                  title="คลิกเพื่อสลับการเรียงลำดับตามวันที่รับ"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>วันที่รับ</span>
+                    {sortField === "date" ? (
+                      sortOrder === "desc" ? (
+                        <span className="text-blue-700 font-extrabold text-[10px]">▼</span>
+                      ) : (
+                        <span className="text-blue-700 font-extrabold text-[10px]">▲</span>
+                      )
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-400 opacity-0 group-hover:opacity-100" />
+                    )}
+                  </div>
                 </th>
                 <th className="px-3.5 py-3 min-w-[110px] bg-sky-50 text-[#003366] text-center font-bold">
                   เลขที่หนังสือ
@@ -1530,29 +1748,51 @@ Email: kittiwat.p@bu.ac.th
               <option value={100}>100</option>
             </select>
             <span className="text-slate-450 font-light ml-2 font-sans">
-              แสดง {filteredList.length === 0 ? 0 : Math.min(filteredList.length, startIndex + 1)} - {Math.min(filteredList.length, startIndex + pageSize)} จาก {filteredList.length} รายการ
+              แสดง {sortedFilteredList.length === 0 ? 0 : Math.min(sortedFilteredList.length, startIndex + 1)} - {Math.min(sortedFilteredList.length, startIndex + pageSize)} จาก {sortedFilteredList.length} รายการ
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* First Page */}
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="p-1.5 h-8 w-8 border border-slate-200 rounded-lg text-slate-700 font-semibold flex items-center justify-center transition cursor-pointer bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="หน้าแรกสุด"
+            >
+              <ChevronsLeft size={15} />
+            </button>
+
+            {/* Prev Page */}
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1.5 h-8 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs flex items-center justify-center transition cursor-pointer select-none bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 font-sans"
+              className="px-2.5 py-1.5 h-8 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs flex items-center justify-center transition cursor-pointer select-none bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 font-sans"
             >
-              ก่อนหน้า / Previous
+              ก่อนหน้า
             </button>
             
-            <div className="px-3 py-1 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-700 font-extrabold text-xs min-w-[100px] font-sans">
-              หน้า {currentPage} จาก {totalPages}
+            <div className="px-3 py-1 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-700 font-extrabold text-xs min-w-[95px] font-sans">
+              หน้า {currentPage} / {totalPages}
             </div>
 
+            {/* Next Page */}
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1.5 h-8 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs flex items-center justify-center transition cursor-pointer select-none bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 font-sans"
+              className="px-2.5 py-1.5 h-8 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs flex items-center justify-center transition cursor-pointer select-none bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 font-sans"
             >
-              ถัดไป / Next
+              ถัดไป
+            </button>
+
+            {/* Last Page */}
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="p-1.5 h-8 w-8 border border-slate-200 rounded-lg text-slate-700 font-semibold flex items-center justify-center transition cursor-pointer bg-white hover:bg-slate-50 active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="หน้าสุดท้าย"
+            >
+              <ChevronsRight size={15} />
             </button>
           </div>
         </div>
@@ -1585,6 +1825,21 @@ Email: kittiwat.p@bu.ac.th
 
             {/* Modal Body & Forms */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {!editingDoc && (
+                <div className="p-3 bg-gradient-to-r from-sky-50 to-blue-50 border border-blue-200/80 rounded-xl flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-blue-600 shrink-0" />
+                    <div>
+                      <span className="text-slate-500 font-medium">ลำดับล่าสุดในระบบ: </span>
+                      <span className="font-bold text-slate-800 font-mono">{latestRiRefNo}</span>
+                    </div>
+                  </div>
+                  <div className="bg-blue-600 text-white px-2.5 py-1 rounded-lg font-bold font-mono text-[11px] shadow-xs">
+                    ฉบับนี้: {formRiRefNo || nextRiRefNo}
+                  </div>
+                </div>
+              )}
               
               {duplicateWarning && (
                 <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2 font-semibold">

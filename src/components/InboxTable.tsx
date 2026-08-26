@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Document, DocumentStatus, DocumentPriority, DocumentCategory } from "../types";
-import { getAcademicYear, formatThaiDate, isReceivedMoreThan5DaysAgo, formatRiRefNo, getDisplayBookNumber } from "../utils/academicYear";
+import { getAcademicYear, formatThaiDate, isReceivedMoreThan5DaysAgo, formatRiRefNo, getDisplayBookNumber, extractRiSeqNumber } from "../utils/academicYear";
 import {
   Search,
   Plus,
@@ -351,6 +351,15 @@ export default function InboxTable({
       return matchVop || matchTitle || matchNum || matchSend || matchDept;
     }
     return true;
+  }).sort((a, b) => {
+    const seqA = extractRiSeqNumber(a.vopId || a.number, a.runningNumber);
+    const seqB = extractRiSeqNumber(b.vopId || b.number, b.runningNumber);
+    if (seqA !== seqB) {
+      return seqB - seqA;
+    }
+    const dateA = a.receivedDate || a.receiveDate || a.createdAt || "";
+    const dateB = b.receivedDate || b.receiveDate || b.createdAt || "";
+    return dateB.localeCompare(dateA);
   });
 
   return (

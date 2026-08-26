@@ -203,3 +203,30 @@ export function getDisplayBookNumber(d: any): string {
 
   return candidate;
 }
+
+/**
+ * Extract numerical sequence number from document reference (e.g. "วพ. 021/2568" -> 21)
+ */
+export function extractRiSeqNumber(id?: string | null, runningNumber?: number | null): number {
+  if (typeof runningNumber === "number" && !isNaN(runningNumber) && runningNumber > 0) {
+    return runningNumber;
+  }
+  if (!id) return 0;
+  const trimmed = id.trim();
+  const prefixedMatch = trimmed.match(/วพ[\s\.\-]*(\d+)\s*\/\s*(\d+)/i);
+  if (prefixedMatch) {
+    const seq = parseInt(prefixedMatch[1], 10);
+    if (!isNaN(seq)) return seq;
+  }
+  const slashMatch = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (slashMatch) {
+    const seq = parseInt(slashMatch[1], 10);
+    if (!isNaN(seq)) return seq;
+  }
+  const singleNumMatch = trimmed.match(/^(\d+)$/);
+  if (singleNumMatch) {
+    const seq = parseInt(singleNumMatch[1], 10);
+    if (!isNaN(seq)) return seq;
+  }
+  return 0;
+}
