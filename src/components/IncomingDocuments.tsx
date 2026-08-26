@@ -1197,6 +1197,7 @@ Email: kittiwat.p@bu.ac.th
               <option value="อนุมัติ">อนุมัติ</option>
               <option value="ลงนามแล้ว">ลงนามแล้ว</option>
               <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
+              <option value="อื่น">อื่น</option>
               <option value="delayed">ล่าช้าเกิน 5 วันทำการ</option>
             </select>
           </div>
@@ -1441,6 +1442,8 @@ Email: kittiwat.p@bu.ac.th
                             ? "bg-teal-50 text-teal-700 border-teal-200"
                             : vpRoutingStatus === "พิจารณาแล้ว"
                             ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : vpRoutingStatus === "อื่น"
+                            ? "bg-slate-100 text-slate-700 border-slate-300"
                             : "bg-amber-50 text-amber-600 border-amber-200"
                         }`}>
                           {vpRoutingStatus}
@@ -1721,6 +1724,7 @@ Email: kittiwat.p@bu.ac.th
                       <option value="อนุมัติ">อนุมัติ</option>
                       <option value="ลงนามแล้ว">ลงนามแล้ว</option>
                       <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
+                      <option value="อื่น">อื่น</option>
                     </select>
                   </div>
 

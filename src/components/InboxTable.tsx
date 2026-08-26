@@ -303,6 +303,9 @@ export default function InboxTable({
     if (status === "พิจารณาแล้ว" || status === "very_urgent" || status === DocumentPriority.VERY_URGENT) {
       return "bg-teal-50 text-teal-800 border-teal-200";
     }
+    if (status === "อื่น") {
+      return "bg-slate-100 text-slate-700 border-slate-300";
+    }
     return "bg-slate-50 text-slate-800 border-slate-200";
   };
 
@@ -409,6 +412,7 @@ export default function InboxTable({
               <option value="อนุมัติ">อนุมัติ</option>
               <option value="ลงนามแล้ว">ลงนามแล้ว</option>
               <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
+              <option value="อื่น">อื่น</option>
               <option value="ดำเนินการแล้ว/ส่งออกแล้ว">ดำเนินการแล้ว/ส่งออกแล้ว</option>
               <option value="late">เกินเวลาพิจารณา (Late {`>`} 5 วันทำการ)</option>
             </select>
@@ -789,7 +793,7 @@ export default function InboxTable({
                     <>
                       <select
                         value={
-                          ["อยู่ระหว่างพิจารณา", "อนุมัติ", "ลงนามแล้ว", "พิจารณาแล้ว"].includes(formStatus)
+                          ["อยู่ระหว่างพิจารณา", "อนุมัติ", "ลงนามแล้ว", "พิจารณาแล้ว", "อื่น"].includes(formStatus)
                             ? formStatus
                             : (formStatus ? "อื่นๆ โปรดระบุ" : "อยู่ระหว่างพิจารณา")
                         }
@@ -807,10 +811,11 @@ export default function InboxTable({
                         <option value="อนุมัติ">อนุมัติ</option>
                         <option value="ลงนามแล้ว">ลงนามแล้ว</option>
                         <option value="พิจารณาแล้ว">พิจารณาแล้ว</option>
+                        <option value="อื่น">อื่น</option>
                         <option value="อื่นๆ โปรดระบุ">อื่นๆ โปรดระบุ</option>
                       </select>
 
-                      {!["อยู่ระหว่างพิจารณา", "อนุมัติ", "ลงนามแล้ว", "พิจารณาแล้ว"].includes(formStatus) && (
+                      {!["อยู่ระหว่างพิจารณา", "อนุมัติ", "ลงนามแล้ว", "พิจารณาแล้ว", "อื่น"].includes(formStatus) && (
                         <div className="mt-2 text-xs">
                           <label className="block text-slate-500 font-bold mb-1">โปรดระบุรายละเอียดสถานะเพิ่มเติม <span className="text-rose-500">*</span></label>
                           <input

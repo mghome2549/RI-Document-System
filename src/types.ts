@@ -22,7 +22,7 @@ export enum DocumentCategory {
 export interface VpRouting {
   docType?: 'e-mail' | 'เอกสาร' | string;
   submitDate?: string;
-  status?: 'อยู่ระหว่างพิจารณา' | 'อนุมัติ' | 'ลงนามแล้ว' | 'พิจารณาแล้ว' | string;
+  status?: 'อยู่ระหว่างพิจารณา' | 'อนุมัติ' | 'ลงนามแล้ว' | 'พิจารณาแล้ว' | 'อื่น' | string;
   detail?: string;
 }
 

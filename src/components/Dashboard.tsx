@@ -585,10 +585,10 @@ export default function Dashboard({
     return hasNoReceiver;
   }).length;
 
-  // Count unique incoming documents where status is "พิจารณาแล้ว", "อนุมัติ", or "ลงนามแล้ว"
+  // Count unique incoming documents where status is "พิจารณาแล้ว", "อนุมัติ", "ลงนามแล้ว", or "อื่น"
   const incomingApprovedCount = inboxDocs.filter(d => {
     const currentStatus = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
-    return currentStatus === "พิจารณาแล้ว" || currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว";
+    return currentStatus === "พิจารณาแล้ว" || currentStatus === "อนุมัติ" || currentStatus === "ลงนามแล้ว" || currentStatus === "อื่น";
   }).length;
 
   const inboxPendingCount = inboxDocs.filter(d => {
@@ -608,7 +608,7 @@ export default function Dashboard({
   const successRate = inboxDocs.length > 0
     ? Math.round((inboxDocs.filter(d => {
         const cs = d.vpRouting?.status || d.status || "อยู่ระหว่างพิจารณา";
-        return cs === "พิจารณาแล้ว" || cs === "อนุมัติ" || cs === "ลงนามแล้ว";
+        return cs === "พิจารณาแล้ว" || cs === "อนุมัติ" || cs === "ลงนามแล้ว" || cs === "อื่น";
       }).length / inboxDocs.length) * 100)
     : 0;
 
