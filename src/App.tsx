@@ -540,7 +540,7 @@ export default function App() {
   const handleDeleteDocument = async (id: string) => {
     try {
       await deleteDocument(id);
-      setDocuments(prev => prev.filter(d => d.id !== id));
+      setDocuments(prev => prev.filter(d => d.id !== id && d.originalDocId !== id));
     } catch (err) {
       handleAppError(err, "เกิดข้อผิดพลาดในการลบเอกสาร");
     }

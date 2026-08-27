@@ -824,18 +824,39 @@ export async function saveOutgoingDocumentWithTransaction(outgoingDoc: Document)
 }
 
 export async function deleteDocument(id: string): Promise<void> {
+  // 1. Delete from Firestore if configured
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const docRef = doc(db, "documents", id);
       await deleteDoc(docRef);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `documents/${id}`);
+      // Clean secondary collections if linked
+      await deleteDoc(doc(db, "outgoing_documents", id)).catch(() => {});
+      await deleteDoc(doc(db, "document_logs", id)).catch(() => {});
+    } catch (err: any) {
+      console.warn("Firestore delete failed, falling back to local clean:", err);
+      // If not permission denied, report error
+      if (err?.code !== "permission-denied") {
+        handleFirestoreError(err, OperationType.DELETE, `documents/${id}`);
+      }
     }
-  } else {
+  }
+
+  // 2. Always clean from localStorage backup to ensure instantaneous state consistency
+  try {
     const stored = localStorage.getItem(MOCK_STORAGE_KEY_DOCS);
-    let docsList: Document[] = stored ? JSON.parse(stored) : [];
-    docsList = docsList.filter((d) => d.id !== id);
-    localStorage.setItem(MOCK_STORAGE_KEY_DOCS, JSON.stringify(docsList));
+    if (stored) {
+      let docsList: Document[] = JSON.parse(stored);
+      docsList = docsList.filter((d) => d.id !== id);
+      localStorage.setItem(MOCK_STORAGE_KEY_DOCS, JSON.stringify(docsList));
+    }
+    const storedLogs = localStorage.getItem("bu_document_logs");
+    if (storedLogs) {
+      let logsList: any[] = JSON.parse(storedLogs);
+      logsList = logsList.filter((l) => l.id !== id && l.vph_ref_no !== id);
+      localStorage.setItem("bu_document_logs", JSON.stringify(logsList));
+    }
+  } catch (localErr) {
+    console.error("Failed to clean localStorage during deletion:", localErr);
   }
 }
 

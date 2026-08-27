@@ -28,7 +28,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Hash,
-  BookmarkCheck
+  BookmarkCheck,
+  AlertTriangle
 } from "lucide-react";
 import { Professor, fetchProfessors } from "../services/professors";
 import AutocompleteInput from "./AutocompleteInput";
@@ -165,8 +166,20 @@ export default function IncomingDocuments({
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
-  // Duplicate document warning indicators
+  // Duplicate document warning & prevention
   const [duplicateWarning, setDuplicateWarning] = useState(false);
+  const [duplicateMatchDoc, setDuplicateMatchDoc] = useState<Document | null>(null);
+  const [allowDuplicateSubmit, setAllowDuplicateSubmit] = useState(false);
+
+  // Custom in-app delete modal state (eliminates reliance on window.confirm which is blocked in iframes)
+  const [docToDelete, setDocToDelete] = useState<{
+    id: string;
+    riRefFormatted: string;
+    subject: string;
+    sender: string;
+    receiveDate: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // States of Refactoring (Enterprise Performance Pagination, Quick-Filters & Reset Trigger)
   const [localActiveWorkflowTab, setLocalActiveWorkflowTab] = useState<"all" | "pending_vp" | "pending_outgoing">("all");
@@ -274,34 +287,67 @@ export default function IncomingDocuments({
     }
   }, [formReceiveDate]);
 
-  // Handle bookNumber change check for duplicates
+  // Real-time Comprehensive Duplicate Detection (ตรวจจับเรื่องซ้ำ & เลขที่หนังสือซ้ำ)
   useEffect(() => {
-    if (!docNumber.trim() || !isModalOpen) {
+    if (!isModalOpen) {
       setDuplicateWarning(false);
-      return;
-    }
-    const normInput = docNumber.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
-    if (!normInput) {
-      setDuplicateWarning(false);
+      setDuplicateMatchDoc(null);
+      setAllowDuplicateSubmit(false);
       return;
     }
 
-    const hasDup = documents.some((d) => {
+    const normSubject = formSubject.replace(/[\s\-\/\.,:;()]+/g, "").toLowerCase().trim();
+    const normBookNo = docNumber.replace(/[\s\-\/\.,:;()]+/g, "").toLowerCase().trim();
+
+    if (!normSubject && !normBookNo) {
+      setDuplicateWarning(false);
+      setDuplicateMatchDoc(null);
+      return;
+    }
+
+    const match = documents.find((d) => {
+      if (d.category !== DocumentCategory.INBOX && d.category) return false;
       if (d.academicYear !== formAcademicYear) return false;
       if (editingDoc && d.id === editingDoc.id) return false;
-      const existingBookNo = getDisplayBookNumber(d);
-      if (existingBookNo === "-") return false;
-      const normExisting = existingBookNo.replace(/[\s\-\/\.]+/g, "").toLowerCase().trim();
-      return normExisting === normInput;
+
+      // 1. Check normalized subject match (minimum 6 chars to avoid accidental false positives on short words)
+      if (normSubject.length >= 6) {
+        const existingSub = (d.subject || d.title || "").replace(/[\s\-\/\.,:;()]+/g, "").toLowerCase().trim();
+        if (existingSub && (existingSub === normSubject || (normSubject.length >= 12 && (existingSub.includes(normSubject) || normSubject.includes(existingSub))))) {
+          return true;
+        }
+      }
+
+      // 2. Check book number match
+      if (normBookNo.length >= 3) {
+        const existingBookNo = getDisplayBookNumber(d);
+        if (existingBookNo !== "-") {
+          const normExistingBookNo = existingBookNo.replace(/[\s\-\/\.,:;()]+/g, "").toLowerCase().trim();
+          if (normExistingBookNo === normBookNo) {
+            return true;
+          }
+        }
+      }
+
+      return false;
     });
 
-    setDuplicateWarning(hasDup);
-  }, [docNumber, formAcademicYear, documents, isModalOpen, editingDoc]);
+    if (match) {
+      setDuplicateWarning(true);
+      setDuplicateMatchDoc(match);
+    } else {
+      setDuplicateWarning(false);
+      setDuplicateMatchDoc(null);
+      setAllowDuplicateSubmit(false);
+    }
+  }, [formSubject, docNumber, formAcademicYear, documents, isModalOpen, editingDoc]);
 
   // Open Dialog for NEW Document creation
   const handleOpenAdd = () => {
     setEditingDoc(null);
     setFormRiRefNo("(จะสร้างเลขที่อัตโนมัติเมื่อกดบันทึก)");
+    setDuplicateMatchDoc(null);
+    setAllowDuplicateSubmit(false);
     
     const today = new Date().toISOString().split("T")[0];
     setFormReceiveDate(today);
@@ -328,6 +374,8 @@ export default function IncomingDocuments({
   // Open Dialog for editing baseline + VP progress + Outgoing delivery
   const handleOpenEdit = (docItem: Document, mergedBack: any) => {
     setEditingDoc(docItem);
+    setDuplicateMatchDoc(null);
+    setAllowDuplicateSubmit(false);
     setFormRiRefNo(formatRiRefNo(docItem.riRefNo || docItem.vopId || docItem.number, docItem.academicYear));
     setFormReceiveDate(docItem.receiveDate || docItem.receivedDate || new Date().toISOString().split("T")[0]);
     const initialBookNum = getDisplayBookNumber(docItem);
@@ -393,6 +441,11 @@ export default function IncomingDocuments({
 
     if (!formSubject.trim()) {
       alert("กรุณาระบุเรื่องเอกสาร");
+      return;
+    }
+
+    if (duplicateMatchDoc && !allowDuplicateSubmit) {
+      alert("⚠️ ตรวจพบข้อมูลเรื่อง/เลขที่หนังสือซ้ำซ้อนในระบบ กรุณากดยืนยันการบันทึกซ้ำก่อนดำเนินการ");
       return;
     }
 
@@ -1231,8 +1284,9 @@ Email: kittiwat.p@bu.ac.th
     <div id="ri-ledger-view-v2" className="space-y-5 font-sans">
 
       {/* Quick Status Bar: เลขที่ วพ. ล่าสุด & เลขที่ถัดไป (ไม่ต้องเลื่อนลงล่าง) */}
-      <div className="bg-gradient-to-r from-[#003366] via-[#004080] to-[#0A2540] text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-700/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+      <div className="bg-gradient-to-r from-[#003366] via-[#004080] to-[#0A2540] text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-700/20 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        {/* Left Chips: Latest & Next Numbers */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
           {/* Latest Number Chip */}
           <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/15">
             <div className="w-8 h-8 rounded-lg bg-[#FFCC00] text-[#003366] flex items-center justify-center font-black text-sm shadow-xs">
@@ -1275,44 +1329,33 @@ Email: kittiwat.p@bu.ac.th
               </div>
             </div>
           </div>
+        </div>
 
-          {latestDocItem && (
-            <div className="hidden xl:block text-xs text-sky-100/80 pl-2 border-l border-white/15 max-w-[280px]">
-              <div className="text-[10px] text-sky-300 font-semibold">
+        {/* Right Section: Full Latest Document Subject & Date */}
+        {latestDocItem && (
+          <div className="w-full lg:flex-1 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/15 text-xs text-sky-100/90">
+            <div className="flex items-center gap-1.5 text-[11px] text-sky-300 font-bold mb-1">
+              <Calendar size={13} className="text-amber-300" />
+              <span>
                 เรื่องล่าสุด ({latestDocItem.receiveDate ? formatThaiDate(latestDocItem.receiveDate) : "-"}):
-              </div>
-              <div className="truncate font-medium text-white text-[11px]" title={latestDocItem.subject || latestDocItem.title}>
-                {latestDocItem.subject || latestDocItem.title}
-              </div>
+              </span>
+              <span className="text-[10px] bg-white/15 text-sky-200 px-2 py-0.5 rounded font-mono font-semibold ml-auto">
+                {latestRiRefNo}
+              </span>
             </div>
-          )}
-        </div>
-
-        {/* Quick Action & Sort Toggle */}
-        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end shrink-0">
-          {/* Sort Toggle Button */}
-          <button
-            onClick={() => {
-              setSortOrder(prev => (prev === "desc" ? "asc" : "desc"));
-              setCurrentPage(1);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition cursor-pointer border border-white/20 active:scale-98"
-            title="คลิกเพื่อสลับการเรียงลำดับรายการในตาราง (ล่าสุด ↔ เก่าสุด)"
-          >
-            <ArrowUpDown size={14} className="text-amber-300" />
-            <span>เรียง: {sortOrder === "desc" ? "ล่าสุดขึ้นก่อน (วพ. ล่าสุด ⬇)" : "เก่าสุดขึ้นก่อน (วพ. 001 ⬆)"}</span>
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={handleOpenAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-[#FFCC00] hover:bg-amber-400 text-[#003366] text-xs font-black rounded-xl shadow-sm transition cursor-pointer active:scale-98"
-            >
-              <Plus size={15} />
-              <span>ลงรับเอกสาร ({nextRiRefNo})</span>
-            </button>
-          )}
-        </div>
+            <div className="font-semibold text-white text-xs sm:text-[13px] leading-relaxed break-words">
+              {latestDocItem.subject || latestDocItem.title || "-"}
+            </div>
+            {(latestDocItem.sender || latestDocItem.senderOutside || latestDocItem.department) && (
+              <div className="text-[11px] text-sky-200/80 mt-1 flex flex-wrap items-center gap-x-2">
+                <span>ผู้ส่ง: <strong className="text-white font-medium">{latestDocItem.sender || latestDocItem.senderOutside || "-"}</strong></span>
+                {latestDocItem.department && (
+                  <span>• สังกัด: <strong className="text-white font-medium">{latestDocItem.department}</strong></span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Search and Action Ribbon */}
@@ -1625,6 +1668,26 @@ Email: kittiwat.p@bu.ac.th
                             {item.subject || item.title || "-"}
                           </span>
                           
+                          {/* Indicator for duplicate subjects in ledger */}
+                          {(() => {
+                            const currentSub = (item.subject || item.title || "").trim().toLowerCase();
+                            const hasDuplicate = currentSub && documents.some(
+                              other => other.id !== item.id &&
+                              other.academicYear === item.academicYear &&
+                              (other.category === DocumentCategory.INBOX || !other.category) &&
+                              (other.subject || other.title || "").trim().toLowerCase() === currentSub
+                            );
+                            if (hasDuplicate) {
+                              return (
+                                <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-100/90 text-amber-900 border border-amber-300 rounded-md text-[10px] font-bold w-fit mt-0.5">
+                                  <AlertTriangle size={11} className="text-amber-600 shrink-0" />
+                                  <span>พบเรื่องซ้ำในระบบ</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+
                           {item.vpRouting?.detail && (
                             <div className="text-red-650 font-bold text-[10.5px] mt-1 bg-red-50/50 p-1.5 rounded border border-red-100/60 leading-normal">
                               📍 ข้อสั่งการ รอง วพ.: {item.vpRouting.detail}
@@ -1697,12 +1760,16 @@ Email: kittiwat.p@bu.ac.th
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`คุณต้องการลบเอกสารรหัส ${riRefFormatted} นี้ใช่หรือไม่?`)) {
-                                  onDeleteDoc(item.id);
-                                }
+                                setDocToDelete({
+                                  id: item.id,
+                                  riRefFormatted,
+                                  subject: item.subject || item.title || "-",
+                                  sender: item.sender || item.senderOutside || "-",
+                                  receiveDate: item.receiveDate || item.receivedDate || ""
+                                });
                               }}
                               className="p-1.5 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition-all shadow-xs cursor-pointer w-8 h-8 flex items-center justify-center"
-                              title="ลบข้อมูล"
+                              title="ลบข้อมูลเอกสาร"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -1841,10 +1908,44 @@ Email: kittiwat.p@bu.ac.th
                 </div>
               )}
               
-              {duplicateWarning && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2 font-semibold">
-                  <ShieldAlert size={16} className="shrink-0 text-red-650" />
-                  <span>เลขที่หนังสือเอกสารนี้ซ้ำซ้อนกับเอกสารที่มีอยู่แล้วในระบบ กรุณาตรวจสอบข้อมูล</span>
+              {duplicateMatchDoc && (
+                <div className="p-4 bg-amber-50 border-2 border-amber-400 rounded-xl space-y-2.5 shadow-sm text-slate-800 animate-fadeIn">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                    <AlertTriangle size={18} className="text-amber-600 shrink-0" />
+                    <span>⚠️ ตรวจพบข้อมูลเรื่อง/เลขที่หนังสือซ้ำซ้อนในระบบ</span>
+                  </div>
+                  
+                  <div className="p-3 bg-white rounded-lg border border-amber-200 text-xs space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-900">
+                        เอกสารเดิม: {formatRiRefNo(duplicateMatchDoc.riRefNo || duplicateMatchDoc.vopId || duplicateMatchDoc.number, duplicateMatchDoc.academicYear)}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        วันที่รับ: {duplicateMatchDoc.receiveDate ? formatThaiDate(duplicateMatchDoc.receiveDate) : "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-800 line-clamp-2">
+                        เรื่อง: {duplicateMatchDoc.subject || duplicateMatchDoc.title || "-"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-amber-100">
+                      <span>ผู้ส่ง: <strong>{duplicateMatchDoc.sender || "-"}</strong></span>
+                      <span>สังกัด: <strong>{duplicateMatchDoc.department || "-"}</strong></span>
+                    </div>
+                  </div>
+                  
+                  <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none bg-amber-100/70 p-2.5 rounded-lg border border-amber-300">
+                    <input
+                      type="checkbox"
+                      checked={allowDuplicateSubmit}
+                      onChange={(e) => setAllowDuplicateSubmit(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 cursor-pointer shrink-0"
+                    />
+                    <span className="text-[11.5px] font-bold text-amber-950 leading-snug">
+                      ยืนยันว่าต้องการบันทึกซ้ำ (หากเป็นเอกสารคนละฉบับแต่ชื่อเรื่องหรือเลขที่คล้ายกัน)
+                    </span>
+                  </label>
                 </div>
               )}
 
@@ -2109,9 +2210,10 @@ Email: kittiwat.p@bu.ac.th
                 </button>
                 <button
                   type="submit"
-                  className="px-5 h-10 bg-[#003366] hover:bg-[#0c4075] text-white text-xs font-bold rounded-xl shadow-md transition active:scale-98 cursor-pointer"
+                  disabled={duplicateMatchDoc !== null && !allowDuplicateSubmit}
+                  className="px-5 h-10 bg-[#003366] hover:bg-[#0c4075] disabled:bg-slate-400 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md transition active:scale-98 cursor-pointer flex items-center gap-1.5"
                 >
-                  🚀 บันทึกเสร็จสมบูรณ์
+                  {duplicateMatchDoc && !allowDuplicateSubmit ? "⚠️ โปรดยืนยันการบันทึกซ้ำก่อน" : "🚀 บันทึกเสร็จสมบูรณ์"}
                 </button>
               </div>
 
@@ -2443,6 +2545,97 @@ Email: kittiwat.p@bu.ac.th
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Custom In-App Delete Confirmation Modal (100% reliable across all browsers & iframes) */}
+      {docToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" 
+            onClick={() => !isDeleting && setDocToDelete(null)} 
+          />
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-slideUp">
+            {/* Header */}
+            <div className="p-4 px-6 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5 font-bold text-sm">
+                <Trash2 size={18} />
+                <span>ยืนยันการลบข้อมูลเอกสาร</span>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => !isDeleting && setDocToDelete(null)}
+                className="p-1 hover:bg-white/10 rounded-lg text-white/80 hover:text-white cursor-pointer transition disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 text-xs font-sans">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-rose-800 uppercase">เลขที่ วพ.:</span>
+                  <span className="font-mono font-bold text-rose-900 text-xs">{docToDelete.riRefFormatted}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-0.5">เรื่อง:</span>
+                  <span className="font-semibold text-slate-800 block text-xs leading-relaxed">{docToDelete.subject}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-rose-100 text-[11px] text-slate-600">
+                  <span>ผู้ส่ง: <strong>{docToDelete.sender}</strong></span>
+                  <span>วันที่รับ: <strong>{docToDelete.receiveDate ? formatThaiDate(docToDelete.receiveDate) : "-"}</strong></span>
+                </div>
+              </div>
+
+              <p className="text-slate-600 text-xs font-medium leading-relaxed">
+                ท่านต้องการลบเอกสารฉบับนี้ออกจากระบบสารบรรณใช่หรือไม่? เมื่อลบแล้วข้อมูลจะถูกนำออกจากระบบทันที
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setDocToDelete(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await onDeleteDoc(docToDelete.id);
+                      setDocToDelete(null);
+                      setShowSuccessToast(true);
+                      setToastMessage(`ลบเอกสาร ${docToDelete.riRefFormatted} เรียบร้อยแล้ว`);
+                      setTimeout(() => setShowSuccessToast(false), 3500);
+                    } catch (err) {
+                      console.error("Delete document failed:", err);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                      <span>กำลังลบ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      <span>ยืนยันลบเอกสาร</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

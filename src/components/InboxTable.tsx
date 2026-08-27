@@ -68,6 +68,8 @@ export default function InboxTable({
 
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<{ id: string; number: string; title: string; sender: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!formBookNumber.trim() || !isModalOpen) {
@@ -577,9 +579,12 @@ export default function InboxTable({
                         {isAdmin && (
                           <button
                             onClick={() => {
-                              if (confirm(`คุณต้องการลบเอกสารเลขที่ ${formatRiRefNo(doc.vopId || doc.number, doc.academicYear)} นี้ใช่หรือไม่?`)) {
-                                onDeleteDoc(doc.id);
-                              }
+                              setDocToDelete({
+                                id: doc.id,
+                                number: formatRiRefNo(doc.vopId || doc.number, doc.academicYear),
+                                title: doc.title || doc.subject || "-",
+                                sender: doc.sender || doc.senderOutside || "-"
+                              });
                             }}
                             className="p-1.5 bg-rose-50 text-rose-600 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition-all cursor-pointer flex items-center justify-center"
                             title="ลบเอกสาร"
@@ -1013,6 +1018,88 @@ export default function InboxTable({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {docToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => !isDeleting && setDocToDelete(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-slideUp">
+            <div className="p-4 px-6 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <Trash2 size={18} />
+                <span>ยืนยันการลบข้อมูลเอกสาร</span>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => !isDeleting && setDocToDelete(null)}
+                className="p-1 hover:bg-white/10 rounded-lg text-white/80 hover:text-white cursor-pointer transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs font-sans">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-rose-800 uppercase">เลขที่ วพ.:</span>
+                  <span className="font-mono font-bold text-rose-900 text-xs">{docToDelete.number}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-0.5">เรื่อง:</span>
+                  <span className="font-semibold text-slate-800 block text-xs leading-relaxed">{docToDelete.title}</span>
+                </div>
+                <div className="text-[11px] text-slate-600 pt-1 border-t border-rose-100">
+                  <span>ผู้ส่ง: <strong>{docToDelete.sender}</strong></span>
+                </div>
+              </div>
+
+              <p className="text-slate-600 text-xs font-medium leading-relaxed">
+                ท่านต้องการลบเอกสารฉบับนี้ออกจากระบบสารบรรณใช่หรือไม่? เมื่อลบแล้วข้อมูลจะถูกนำออกจากระบบทันที
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setDocToDelete(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await onDeleteDoc(docToDelete.id);
+                      setDocToDelete(null);
+                    } catch (err) {
+                      console.error("Delete failed:", err);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                      <span>กำลังลบ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      <span>ยืนยันลบเอกสาร</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
