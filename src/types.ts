@@ -79,6 +79,9 @@ export interface Document {
   lastUpdatedAt?: string;
   recipientEmail?: string;
   pdfAttachmentName?: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
+  emailStatus?: 'sent' | 'unsent' | 'failed' | string;
 }
 
 export interface UserRoleInfo {

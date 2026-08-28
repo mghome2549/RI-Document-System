@@ -29,10 +29,13 @@ import {
   ChevronsRight,
   Hash,
   BookmarkCheck,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle,
+  Clock
 } from "lucide-react";
 import { Professor, fetchProfessors } from "../services/professors";
 import AutocompleteInput from "./AutocompleteInput";
+import EmailAutocompleteInput from "./EmailAutocompleteInput";
 
 interface IncomingDocumentsProps {
   documents: Document[];
@@ -1013,6 +1016,21 @@ Email: kittiwat.p@bu.ac.th
       try {
         await sendNotificationEmail(mailObject, payload.recipientEmail, fileBase64);
         
+        // Persist email sent status to current document
+        if (currentDoc.id && currentDoc.id !== '-') {
+          const targetDoc = documents.find(d => d.id === currentDoc.id);
+          if (targetDoc) {
+            const updatedDoc: Document = {
+              ...targetDoc,
+              emailSent: true,
+              emailSentAt: new Date().toISOString(),
+              emailStatus: 'sent',
+              recipientEmail: payload.recipientEmail || targetDoc.recipientEmail
+            };
+            onEditDoc(updatedDoc);
+          }
+        }
+
         // Success notification and automatically close modal
         setToastMessage("จัดส่งอีเมลแจ้งผลพิจารณาเรียบร้อยแล้ว!");
         setShowSuccessToast(true);
@@ -1040,56 +1058,126 @@ Email: kittiwat.p@bu.ac.th
     }
   };
 
-  const handleSendEmail = (item: Document, mergedOut: any) => {
-    const doc = {
-      senderName: item.sender || "ไม่ได้ระบุผู้ส่ง",
-      department: item.department || "ไม่ได้ระบุหน่วยงาน",
-      vphRef: formatRiRefNo(item.riRefNo || item.vopId || item.number, item.academicYear),
-      id: item.id,
-      docNumber: item.docNumber || item.bookNumber || item.number || "-",
-      subject: item.subject || item.title || "-",
-      vpRouting: {
-        status: item.vpRouting?.status || item.status || "อยู่ระหว่างพิจารณา"
-      },
-      outgoingDate: mergedOut.sendDate ? formatThaiDate(mergedOut.sendDate) : "-",
-      receiverName: mergedOut.receiver || "-",
-      outgoingDept: mergedOut.outgoingDepartment || "-"
+  // Helper function to check whether consideration email was already sent for a document
+  const getDocEmailStatus = (item: Document, mergedOut?: any) => {
+    if (item.emailSent || item.emailSentAt) {
+      return {
+        sent: true,
+        sentAt: item.emailSentAt,
+        email: item.recipientEmail || mergedOut?.recipientEmail || ""
+      };
+    }
+    if (mergedOut?.emailSent || mergedOut?.emailSentAt) {
+      return {
+        sent: true,
+        sentAt: mergedOut.emailSentAt,
+        email: mergedOut.recipientEmail || item.recipientEmail || ""
+      };
+    }
+
+    // Check localStorage log repository
+    try {
+      const rawLogs = localStorage.getItem("bu_document_logs");
+      if (rawLogs) {
+        const logs = JSON.parse(rawLogs);
+        if (Array.isArray(logs)) {
+          const formattedRef = formatRiRefNo(item.riRefNo || item.vopId || item.number, item.academicYear);
+          const match = logs.find((l: any) => {
+            if (!l) return false;
+            if (l.vph_ref_no && (l.vph_ref_no === formattedRef || l.vph_ref_no === item.riRefNo || l.vph_ref_no === item.id)) return true;
+            if (l.doc_number && item.docNumber && l.doc_number === item.docNumber && item.docNumber !== "-") return true;
+            if (l.subject && item.subject && l.subject.trim() === item.subject.trim() && item.subject.length > 5) return true;
+            return false;
+          });
+          if (match) {
+            return {
+              sent: true,
+              sentAt: match.created_at || match.outgoing_date,
+              email: match.recipient_email || item.recipientEmail || ""
+            };
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return {
+      sent: false,
+      sentAt: undefined,
+      email: item.recipientEmail || mergedOut?.recipientEmail || ""
     };
+  };
 
-    const subject = `แจ้งผลการพิจารณาเอกสาร ${doc.docNumber || '-'} - ${doc.subject}`;
+  // Open rich email preview popup for any document directly from table or action
+  const handleOpenEmailPreviewForDoc = (item: Document, mergedOut?: any) => {
+    const formattedRiRef = formatRiRefNo(item.riRefNo || item.vopId || item.number, item.academicYear);
+    const docSender = item.sender || "ไม่ได้ระบุผู้ส่ง";
+    const docDept = item.department || "ไม่ได้ระบุหน่วยงาน";
+    const docNumberText = item.docNumber || item.bookNumber || item.number || "-";
+    const docSubject = item.subject || item.title || "-";
+    const docVpStatus = item.vpRouting?.status || item.status || "พิจารณาแล้ว";
+    const docOutgoingDate = mergedOut?.sendDate ? formatThaiDate(mergedOut.sendDate) : (item.sendDate ? formatThaiDate(item.sendDate) : "-");
+    const docReceiver = mergedOut?.receiver || item.receiver || "-";
+    const docOutgoingDept = mergedOut?.outgoingDepartment || item.outgoingDepartment || "-";
+    
+    // Find recipient email (defaults to matched professor email or item recipientEmail)
+    let targetEmail = item.recipientEmail || mergedOut?.recipientEmail || "";
+    if (!targetEmail && item.sender) {
+      const sName = item.sender.trim().toLowerCase();
+      const matchedProf = professors.find(p => p.name.trim().toLowerCase() === sName || sName.includes(p.name.trim().toLowerCase()));
+      if (matchedProf?.email) targetEmail = matchedProf.email;
+    }
 
-    const body = `เรียน ${doc.senderName} (${doc.department})
+    const docRefId = item.id || "";
+    const baseUrl = getBaseUrl();
+    const ratingLinks = `
+--------------------------------------------------
+📊 แบบประเมินความพึงพอใจการให้บริการ (วพ. Service Rating)
+โปรดคลิกลิงก์เลือกระดับดาวเพื่อบันทึกคะแนนประเมินความพึงพอใจของท่านลงในระบบโดยตรง:
+
+🤬 ปรับปรุง (1 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=1
+😟 พอใช้ (2 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=2
+😐 ปานกลาง (3 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=3
+😊 ดี (4 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=4
+🤩 ดีเยี่ยม (5 ดาว): ${baseUrl}/evaluate?docId=${docRefId}&score=5
+--------------------------------------------------`;
+
+    const emailBody = `เรียน ${docSender} (${docDept})
 
 สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.) ขอแจ้งผลการพิจารณาเอกสาร โดยมีรายละเอียดดังต่อไปนี้:
-• เลขที่อ้างอิง วพ.: ${doc.vphRef || doc.id}
-• เลขที่หนังสือต้นทาง: ${doc.docNumber}
-• เรื่อง / ชื่อโครงการ: ${doc.subject}
-• ผลการพิจารณาจาก รอง วพ.: ${doc.vpRouting.status}
-• วันที่ดำเนินการส่งออก: ${doc.outgoingDate}
-• หน่วยงานปลายทางที่รับช่วงต่อ: ${doc.receiverName} (หน่วยงาน: ${doc.outgoingDept})
+• เลขที่อ้างอิง วพ.: ${formattedRiRef}
+• เลขที่หนังสือต้นทาง: ${docNumberText}
+• เรื่อง / ชื่อโครงการ: ${docSubject}
+• ผลการพิจารณาจาก รอง วพ.: ${docVpStatus}
+• วันที่ดำเนินการส่งออก: ${docOutgoingDate}
+• หน่วยงานปลายทางที่รับช่วงต่อ: ${docReceiver} (หน่วยงาน: ${docOutgoingDept})
 
 (หมายเหตุ: เอกสารฉบับจริงที่ผ่านการพิจารณาจาก รอง วพ. ได้ดำเนินการจัดส่งต่อให้กับที่เกี่ยวข้อง เพื่อโปรดดำเนินการในขั้นตอนต่อไปเรียบร้อยแล้ว)
 
-📊 โปรดทำแบบประเมินความพึงพอใจการให้บริการได้ที่: [ใส่ลิงก์แบบประเมินความพึงพอใจตรงนี้ / YOUR_GOOGLE_FORM_LINK_HERE]
-
 จึงเรียนมาเพื่อโปรดทราบ
+
+${ratingLinks}
 
 ขอแสดงความนับถือ
 อ.กิตติวัฒน์ ต่อ 2122
 Email: kittiwat.p@bu.ac.th
 สายงานวิจัยและพัฒนานวัตกรรมการศึกษา (วพ.)`;
 
-    const senderNameClean = (item.sender || "").trim();
-    const defaultEmailSuffix = "@bu.ac.th";
-    const guessedUser = senderNameClean.includes(" ") ? senderNameClean.split(" ")[0] : senderNameClean;
-    const userEmailInput = prompt(
-      `กรุณาระบุอีเมลของผู้รับการแจ้งเตือน (${senderNameClean}):`, 
-      guessedUser ? `${guessedUser.toLowerCase()}${defaultEmailSuffix}` : `user${defaultEmailSuffix}`
-    );
-    if (userEmailInput === null) return; // user cancelled
-    const recipientEmail = userEmailInput || `${guessedUser.toLowerCase()}${defaultEmailSuffix}`;
+    const emailSubject = `แจ้งผลการพิจารณาเอกสาร ${docNumberText} - ${docSubject}`;
 
-    window.open(`mailto:${recipientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+    setActiveDocId(item.id);
+    setPreviewEmailSubject(emailSubject);
+    setPreviewEmailBody(emailBody);
+    setPreviewRecipient(targetEmail);
+    setPreviewAttachmentName(item.pdfAttachmentName || "");
+    setRating(0);
+    setIsCopied(false);
+    setIsEmailPreviewOpen(true);
+  };
+
+  const handleSendEmail = (item: Document, mergedOut: any) => {
+    handleOpenEmailPreviewForDoc(item, mergedOut);
   };
 
   // Build the merged hybrid entries (Historical compatibility read guard)
@@ -1742,19 +1830,67 @@ Email: kittiwat.p@bu.ac.th
 
                       {/* Column 8: สถานะพิจารณา (VP REVIEW ZONE - text-center) */}
                       <td className="px-3.5 py-3 text-center bg-amber-50 border-r border-amber-900/15 whitespace-nowrap align-top">
-                        <span className={`px-2.5 py-0.5 rounded font-extrabold border text-[9.5px] ${
-                          vpRoutingStatus === "อนุมัติ"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : vpRoutingStatus === "ลงนามแล้ว"
-                            ? "bg-teal-50 text-teal-700 border-teal-200"
-                            : vpRoutingStatus === "พิจารณาแล้ว"
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                            : vpRoutingStatus === "อื่น"
-                            ? "bg-slate-100 text-slate-700 border-slate-300"
-                            : "bg-amber-50 text-amber-600 border-amber-200"
-                        }`}>
-                          {vpRoutingStatus}
-                        </span>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <span className={`px-2.5 py-0.5 rounded font-extrabold border text-[9.5px] ${
+                            vpRoutingStatus === "อนุมัติ"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : vpRoutingStatus === "ลงนามแล้ว"
+                              ? "bg-teal-50 text-teal-700 border-teal-200"
+                              : vpRoutingStatus === "พิจารณาแล้ว"
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              : vpRoutingStatus === "อื่น"
+                              ? "bg-slate-100 text-slate-700 border-slate-300"
+                              : "bg-amber-50 text-amber-600 border-amber-200"
+                          }`}>
+                            {vpRoutingStatus}
+                          </span>
+
+                          {/* Email Dispatch Status Badge */}
+                          {(() => {
+                            const emailInfo = getDocEmailStatus(item, mergedOut);
+                            if (emailInfo.sent) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEmailPreviewForDoc(item, mergedOut);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200 border border-emerald-300 px-2 py-0.5 rounded-full shadow-2xs cursor-pointer transition"
+                                  title={`📧 ส่งอีเมลแจ้งผลแล้ว${emailInfo.sentAt ? ` (${formatThaiDate(emailInfo.sentAt)})` : ''}${emailInfo.email ? ` ไปยัง ${emailInfo.email}` : ''} • คลิกเพื่อดูร่าง/ส่งซ้ำ`}
+                                >
+                                  <CheckCircle size={10} className="text-emerald-600 shrink-0" />
+                                  <span>ส่งอีเมลแล้ว</span>
+                                </button>
+                              );
+                            }
+                            if (vpRoutingStatus !== "อยู่ระหว่างพิจารณา") {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEmailPreviewForDoc(item, mergedOut);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-100/90 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full shadow-2xs cursor-pointer transition group"
+                                  title="⚠️ พิจารณาแล้วแต่ยังไม่ได้ส่งอีเมลแจ้งผล • คลิกเพื่อเปิดหน้าต่างส่งอีเมล"
+                                >
+                                  <Mail size={10} className="text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                                  <span>ยังไม่ส่งอีเมล</span>
+                                </button>
+                              );
+                            }
+                            return (
+                              <span
+                                className="inline-flex items-center gap-1 text-[8.5px] text-slate-400 font-medium bg-slate-100/70 border border-slate-200/80 px-1.5 py-0.5 rounded-full"
+                                title="อยู่ระหว่างพิจารณา (ยังไม่ส่งแจ้งผล)"
+                              >
+                                <Clock size={9} className="text-slate-400 shrink-0" />
+                                <span>รอพิจารณา</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
 
                       {/* Column 9: วันที่ส่งออก (OUTGOING SHIPMENT ZONE - text-center) */}
@@ -1781,7 +1917,27 @@ Email: kittiwat.p@bu.ac.th
 
                       {/* Manage Actions Unit */}
                       <td className="px-3.5 py-3 whitespace-nowrap text-center bg-white align-top sticky right-0 z-20 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {(() => {
+                            const emailInfo = getDocEmailStatus(item, mergedOut);
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEmailPreviewForDoc(item, mergedOut);
+                                }}
+                                className={`p-1.5 rounded-lg transition-all shadow-xs cursor-pointer w-8 h-8 flex items-center justify-center ${
+                                  emailInfo.sent
+                                    ? "bg-emerald-50 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                                    : "bg-blue-50 text-blue-600 hover:text-blue-700 hover:bg-blue-100 border border-blue-200"
+                                }`}
+                                title={emailInfo.sent ? "ดูประวัติและส่งอีเมลแจ้งผลซ้ำ" : "ส่งอีเมลแจ้งผลการพิจารณาให้อาจารย์เจ้าของเรื่อง"}
+                              >
+                                <Mail size={13} />
+                              </button>
+                            );
+                          })()}
                           {isAdmin ? (
                             <button
                               onClick={(e) => {
@@ -1799,9 +1955,7 @@ Email: kittiwat.p@bu.ac.th
                             >
                               <Trash2 size={13} />
                             </button>
-                          ) : (
-                            <span className="text-slate-400 font-light text-[10px]">-</span>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -2200,17 +2354,46 @@ Email: kittiwat.p@bu.ac.th
                         </button>
                       )}
                     </div>
-                    <input
+                    <EmailAutocompleteInput
                       id="formRecipientEmail-input"
-                      type="email"
                       value={formRecipientEmail}
-                      onChange={(e) => setFormRecipientEmail(e.target.value)}
-                      placeholder="เช่น owner@bu.ac.th (อีเมลอาจารย์เจ้าของเรื่อง)"
-                      className="w-full text-xs h-9 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800 font-sans"
+                      onChange={(val) => setFormRecipientEmail(val)}
+                      professors={professors}
+                      placeholder="พิมพ์ชื่ออาจารย์หรืออีเมล เช่น kittiwat.p@bu.ac.th..."
                     />
                     <span className="text-[10px] text-slate-500 block mt-1 font-sans leading-relaxed">
                       📧 อีเมลอาจารย์เจ้าของเอกสารสำหรับส่งแจ้งผลการพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว (รองรับทั้งเอกสารประเภท Paper และ e-mail)
                     </span>
+
+                    {/* Email Dispatch History Status in Modal */}
+                    {editingDoc && (() => {
+                      const emailInfo = getDocEmailStatus(editingDoc);
+                      if (emailInfo.sent) {
+                        return (
+                          <div className="mt-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-800">
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                              <span>ส่งอีเมลแจ้งผลแล้ว {emailInfo.sentAt ? `(${formatThaiDate(emailInfo.sentAt)})` : ''} {emailInfo.email ? `ไปยัง ${emailInfo.email}` : ''}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEmailPreviewForDoc(editingDoc)}
+                              className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10.5px] font-bold shadow-2xs cursor-pointer transition shrink-0"
+                            >
+                              ส่งซ้ำ/ดูร่าง
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="mt-2 p-2 rounded-lg bg-amber-50/80 border border-amber-200 flex items-center justify-between text-[11px] text-amber-800">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Mail size={13} className="text-amber-600 shrink-0" />
+                            <span>ยังไม่มีประวัติการส่งอีเมลแจ้งผลสำหรับเอกสารนี้</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Input 2: PDF File Attachment */}
@@ -2317,15 +2500,23 @@ Email: kittiwat.p@bu.ac.th
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               
               {/* Recipient Details & Attachment Banner */}
-              <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="font-bold text-slate-500 block text-[10px] uppercase">ผู้ส่ง (Sender Default):</span>
-                    <span className="font-semibold text-slate-800">kittiwat.p@bu.ac.th</span>
+                    <span className="font-bold text-slate-500 block text-[10px] uppercase mb-1">ผู้ส่ง (Sender Default):</span>
+                    <span className="font-semibold text-slate-800 bg-white px-2.5 py-1 rounded-md border border-slate-200 block text-xs">
+                      kittiwat.p@bu.ac.th
+                    </span>
                   </div>
                   <div>
-                    <span className="font-bold text-slate-500 block text-[10px] uppercase">ผู้รับ (Recipient):</span>
-                    <span className="font-semibold text-slate-800 font-mono">{previewRecipient}</span>
+                    <span className="font-bold text-slate-500 block text-[10px] uppercase mb-1">ผู้รับ (Recipient Email):</span>
+                    <EmailAutocompleteInput
+                      id="preview-recipient-input"
+                      value={previewRecipient}
+                      onChange={(val) => setPreviewRecipient(val)}
+                      professors={professors}
+                      placeholder="เลือกหรือพิมพ์อีเมลผู้รับ..."
+                    />
                   </div>
                 </div>
                 {previewAttachmentName && (
