@@ -399,16 +399,30 @@ export default function InboxTable({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Search Bar */}
           <div className="relative md:col-span-1">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
               <Search size={15} />
             </span>
             <input
               type="text"
+              id="search-inbox-input"
               placeholder="ค้นหา RI Ref No., ผู้ส่ง, หน่วยงาน..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-10 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#003366]"
+              className="w-full h-10 pl-9 pr-9 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#003366]"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                id="clear-inbox-search-btn"
+                onClick={() => setSearchTerm("")}
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="ล้างคำค้นหา"
+              >
+                <div className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition">
+                  <X size={14} />
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Status filter selection */}

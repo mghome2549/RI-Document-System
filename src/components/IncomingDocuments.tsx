@@ -188,9 +188,9 @@ export default function IncomingDocuments({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
-  // Sorting Controls: Default to "desc" (Newest first / วพ. ล่าสุดขึ้นก่อน เพื่อให้ไม่ต้องเลื่อนลงไปล่างสุด)
+  // Sorting Controls: Default to "desc" (Newest date first / วันที่รับล่าสุดขึ้นก่อน)
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
-  const [sortField, setSortField] = useState<"riRef" | "date">("riRef");
+  const [sortField, setSortField] = useState<"riRef" | "date">("date");
   const [copiedLatest, setCopiedLatest] = useState(false);
 
   // Reset pagination state when filters or sorting change to avoid empty-state ghosts
@@ -398,10 +398,19 @@ export default function IncomingDocuments({
       ? docItem.outgoingDepartment
       : (mergedBack.outgoingDepartment || "");
 
+    let initialRecipientEmail = docItem.recipientEmail || mergedBack.recipientEmail || "";
+    if (!initialRecipientEmail && (docItem.sender || docItem.senderOutside)) {
+      const sName = (docItem.sender || docItem.senderOutside || "").trim().toLowerCase();
+      const matchedProf = professors.find(p => p.name.toLowerCase().trim() === sName || sName.includes(p.name.toLowerCase().trim()));
+      if (matchedProf?.email) {
+        initialRecipientEmail = matchedProf.email;
+      }
+    }
+
     setFormSendDate(docItem.sendDate || mergedBack.sendDate || "");
     setFormReceiver(initialReceiver);
     setFormOutgoingDepartment(initialOutgoingDepartment);
-    setFormRecipientEmail(docItem.recipientEmail || mergedBack.recipientEmail || "");
+    setFormRecipientEmail(initialRecipientEmail);
     setFormPdfFile(null);
 
     setIsModalOpen(true);
@@ -1366,11 +1375,31 @@ Email: kittiwat.p@bu.ac.th
           </span>
           <input
             type="text"
+            id="search-input-documents"
             placeholder="พิมพ์คำค้นหา (เลขที่ วพ. / ชื่อเรื่อง / ผู้รับส่ง)..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full text-xs h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-600 transition"
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full text-xs h-10 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              id="clear-search-btn"
+              onClick={() => {
+                setSearchTerm("");
+                setCurrentPage(1);
+              }}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer transition"
+              title="ล้างคำค้นหา"
+            >
+              <div className="p-0.5 rounded-full hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 transition">
+                <X size={15} />
+              </div>
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0">
@@ -1381,19 +1410,16 @@ Email: kittiwat.p@bu.ac.th
               <span>การเรียง:</span>
             </span>
             <select
-              value={`${sortField}_${sortOrder}`}
+              value={sortOrder}
               onChange={(e) => {
-                const [f, o] = e.target.value.split("_") as ["riRef" | "date", "desc" | "asc"];
-                setSortField(f);
-                setSortOrder(o);
+                setSortField("date");
+                setSortOrder(e.target.value as "desc" | "asc");
                 setCurrentPage(1);
               }}
               className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
             >
-              <option value="riRef_desc">เลขที่ วพ. ล่าสุดขึ้นก่อน (Newest ⬇)</option>
-              <option value="riRef_asc">เลขที่ วพ. เก่าสุดขึ้นก่อน (001 ⬆)</option>
-              <option value="date_desc">วันที่รับล่าสุดขึ้นก่อน</option>
-              <option value="date_asc">วันที่รับเก่าสุดขึ้นก่อน</option>
+              <option value="desc">วันที่รับล่าสุดขึ้นก่อน</option>
+              <option value="asc">วันที่รับเก่าสุดขึ้นก่อน</option>
             </select>
           </div>
 
@@ -2001,10 +2027,19 @@ Email: kittiwat.p@bu.ac.th
                     id="formSender-input"
                     label="ผู้ส่ง (ชื่อผู้ยื่นร่วม/อาจารย์เจ้าของเรื่อง)"
                     value={formSender}
-                    onChange={(val) => setFormSender(val)}
+                    onChange={(val) => {
+                      setFormSender(val);
+                      const matched = professors.find(p => p.name.trim().toLowerCase() === val.trim().toLowerCase());
+                      if (matched?.email) {
+                        setFormRecipientEmail(matched.email);
+                      }
+                    }}
                     onSelect={(prof) => {
                       setFormSender(prof.name);
                       setFormDepartment(prof.department);
+                      if (prof.email) {
+                        setFormRecipientEmail(prof.email);
+                      }
                     }}
                     professors={professors}
                     placeholder="พิมพ์ชื่ออาจารย์เพื่อกรองและกรอกข้อมูลหน่วยงานสังกัด..."
@@ -2123,17 +2158,13 @@ Email: kittiwat.p@bu.ac.th
                     value={formReceiver}
                     onChange={(val) => {
                       setFormReceiver(val);
-                      if (!val.trim()) {
-                        setFormRecipientEmail("");
-                      }
                     }}
                     onSelect={(prof) => {
                       setFormReceiver(prof.name);
                       setFormOutgoingDepartment(prof.department);
-                      setFormRecipientEmail(prof.email);
                     }}
                     professors={professors}
-                    placeholder="พิมพ์ชื่ออาจารย์เพื่อเลือกเป็นผู้รับและกรอกข้อมูลอัจฉริยะ..."
+                    placeholder="พิมพ์ชื่ออาจารย์หรือหน่วยงานผู้รับปลายทาง..."
                     required={false}
                   />
 
@@ -2149,21 +2180,36 @@ Email: kittiwat.p@bu.ac.th
                     />
                   </div>
 
-                  {/* Input 1: Recipient Email */}
+                  {/* Input 1: Document Owner Email for consideration notification */}
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">
-                      อีเมลผู้รับ/อาจารย์ผู้ส่งเรื่อง (Recipient Email)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[10px] font-bold text-slate-600 font-sans">
+                        อีเมลอาจารย์เจ้าของเอกสาร (Document Owner Email)
+                      </label>
+                      {formSender && professors.find(p => p.name.trim().toLowerCase() === formSender.trim().toLowerCase())?.email && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const found = professors.find(p => p.name.trim().toLowerCase() === formSender.trim().toLowerCase());
+                            if (found?.email) setFormRecipientEmail(found.email);
+                          }}
+                          className="text-[10px] text-blue-600 hover:text-blue-800 underline font-semibold cursor-pointer"
+                          title="ดึงอีเมลจากอาจารย์เจ้าของเรื่อง (Block A)"
+                        >
+                          ดึงอีเมลเจ้าของเรื่อง
+                        </button>
+                      )}
+                    </div>
                     <input
                       id="formRecipientEmail-input"
                       type="email"
                       value={formRecipientEmail}
                       onChange={(e) => setFormRecipientEmail(e.target.value)}
-                      placeholder="เช่น owner@bu.ac.th"
-                      className="w-full text-xs h-9 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800"
+                      placeholder="เช่น owner@bu.ac.th (อีเมลอาจารย์เจ้าของเรื่อง)"
+                      className="w-full text-xs h-9 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-800 font-sans"
                     />
-                    <span className="text-[10px] text-slate-450 block mt-1 font-sans">
-                      📧 กรอกอีเมลเพื่อส่งแจ้งเตือนผลพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว (รองรับทั้งเอกสารประเภท Paper และ e-mail)
+                    <span className="text-[10px] text-slate-500 block mt-1 font-sans leading-relaxed">
+                      📧 อีเมลอาจารย์เจ้าของเอกสารสำหรับส่งแจ้งผลการพิจารณาและแบบประเมินความพึงพอใจ 5 ดาว (รองรับทั้งเอกสารประเภท Paper และ e-mail)
                     </span>
                   </div>
 

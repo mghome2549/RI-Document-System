@@ -11,6 +11,7 @@ import {
   Code,
   GraduationCap,
   Search,
+  X,
   Edit,
   Check,
   Copy,
@@ -844,16 +845,30 @@ export default function UserManagement({
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 font-sans">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 font-sans">
               <div className="relative w-full lg:max-w-xs font-sans">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-sans">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-sans pointer-events-none">
                   <Search size={14} />
                 </span>
                 <input
                   type="text"
+                  id="search-prof-input"
                   value={profSearch}
                   onChange={(e) => setProfSearch(e.target.value)}
                   placeholder="ค้นหาอาจารย์... (ชื่อ, ตำแหน่ง, สังกัด)"
-                  className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-slate-800"
+                  className="w-full h-9 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-slate-800"
                 />
+                {profSearch && (
+                  <button
+                    type="button"
+                    id="clear-prof-search-btn"
+                    onClick={() => setProfSearch("")}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    title="ล้างคำค้นหา"
+                  >
+                    <div className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition">
+                      <X size={13} />
+                    </div>
+                  </button>
+                )}
               </div>
 
               {/* Action Buttons Desk */}
